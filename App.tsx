@@ -8,7 +8,6 @@ import {
   FileSpreadsheet, 
   Download,
   Settings,
-  BrainCircuit,
   ChevronRight,
   Moon,
   Sun,
@@ -26,13 +25,12 @@ import CustomerManager from './components/CustomerManager';
 import ProductManager from './components/ProductManager';
 import OrderManager from './components/OrderManager';
 import OrderCalendar from './components/OrderCalendar';
-import GeminiInsights from './components/GeminiInsights';
 import OrderEditModal from './components/OrderEditModal';
 import * as XLSX from 'xlsx';
 import { db } from './firebase';
 import { collection, doc, setDoc, deleteDoc, getDocs, writeBatch } from 'firebase/firestore';
 
-const APP_VERSION = "Ver.1.35";
+const APP_VERSION = "Ver.1.36";
 const COMPANY_NAME = "裏白本舗";
 
 // ────────────────────────────────────────────────
@@ -57,7 +55,7 @@ function syncToFirestore<T extends { id: string }>(
 }
 
 const App: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'orders' | 'products' | 'customers' | 'calendar' | 'dashboard' | 'insights'>('orders');
+  const [activeTab, setActiveTab] = useState<'orders' | 'products' | 'customers' | 'calendar' | 'dashboard'>('orders');
   const [viewType, setViewType] = useState<'pre' | 'post'>('pre');
   const [isContentVisible, setIsContentVisible] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(false);
@@ -300,7 +298,6 @@ const App: React.FC = () => {
     { id: 'products', label: '商品管理', icon: Package },
     { id: 'customers', label: '顧客管理', icon: Users },
     { id: 'dashboard', label: 'ダッシュボード', icon: LayoutDashboard },
-    { id: 'insights', label: 'AI分析', icon: BrainCircuit },
   ] as const;
 
   const handleNavClick = (id: typeof activeTab) => {
@@ -497,7 +494,6 @@ const App: React.FC = () => {
                 {activeTab === 'customers' && <CustomerManager customers={customers} setCustomers={setCustomersFS} />}
                 {activeTab === 'products' && <ProductManager products={products} setProducts={setProductsFS} orders={orders} />}
                 {activeTab === 'calendar' && <OrderCalendar orders={orders} customers={customers} products={products} onEditOrder={openOrderModal} />}
-                {activeTab === 'insights' && <GeminiInsights orders={orders} products={products} />}
               </div>
             </div>
           </>
