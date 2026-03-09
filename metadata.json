@@ -1,0 +1,5 @@
+{
+  "name": "注文管理システム",
+  "description": "A comprehensive order and customer management system featuring spreadsheet-like editing, Excel exports, sales analytics, and delivery calendar integration.",
+  "requestFramePermissions": []
+}
