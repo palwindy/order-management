@@ -1,5 +1,4 @@
-
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { 
   Users, 
   Package, 
@@ -14,7 +13,6 @@ import {
   Moon,
   Sun,
   Globe,
-  LogOut,
   X,
   Loader2,
   CheckCircle,
@@ -31,9 +29,32 @@ import OrderCalendar from './components/OrderCalendar';
 import GeminiInsights from './components/GeminiInsights';
 import OrderEditModal from './components/OrderEditModal';
 import * as XLSX from 'xlsx';
+import { db } from './firebase';
+import { collection, doc, setDoc, deleteDoc, getDocs, writeBatch } from 'firebase/firestore';
 
-const APP_VERSION = "Ver.1.34";
+const APP_VERSION = "Ver.1.35";
 const COMPANY_NAME = "裏白本舗";
+
+// ────────────────────────────────────────────────
+// Firestoreへの差分同期ヘルパー（追加・更新・削除を自動検出）
+// ────────────────────────────────────────────────
+function syncToFirestore<T extends { id: string }>(
+  collectionName: string,
+  prev: T[],
+  next: T[]
+) {
+  // 削除されたドキュメントを検出して削除
+  const deletedIds = prev
+    .filter(p => !next.find(n => n.id === p.id))
+    .map(p => p.id);
+  // 追加・更新されたドキュメントを検出してupsert
+  const upserted = next.filter(n => {
+    const old = prev.find(p => p.id === n.id);
+    return !old || JSON.stringify(old) !== JSON.stringify(n);
+  });
+  deletedIds.forEach(id => deleteDoc(doc(db, collectionName, id)));
+  upserted.forEach(item => setDoc(doc(db, collectionName, item.id), item));
+}
 
 const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'orders' | 'products' | 'customers' | 'calendar' | 'dashboard' | 'insights'>('orders');
@@ -43,8 +64,9 @@ const App: React.FC = () => {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncDone, setSyncDone] = useState(false);
-  
-  // Googleカレンダー設定用のステート
+  const [isLoading, setIsLoading] = useState(true);
+
+  // Googleカレンダー設定はUI設定なのでlocalStorageのまま
   const [googleAccount, setGoogleAccount] = useState(() => {
     return localStorage.getItem('googleAccount') || 'example@gmail.com';
   });
@@ -59,39 +81,109 @@ const App: React.FC = () => {
   // 注文編集用グローバルステート
   const [isOrderModalOpen, setIsOrderModalOpen] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
-  
-  const [customers, setCustomers] = useState<Customer[]>(() => {
-    const saved = localStorage.getItem('customers');
-    return saved ? JSON.parse(saved) : INITIAL_CUSTOMERS;
-  });
-  const [products, setProducts] = useState<Product[]>(() => {
-    const saved = localStorage.getItem('products');
-    return saved ? JSON.parse(saved) : INITIAL_PRODUCTS;
-  });
-  const [orders, setOrders] = useState<Order[]>(() => {
-    const saved = localStorage.getItem('orders');
-    return saved ? JSON.parse(saved) : INITIAL_ORDERS;
-  });
 
+  // データはFirestoreから読み込む（初期値は空配列）
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [orders, setOrders] = useState<Order[]>([]);
+
+  // ────────────────────────────────────────────────
+  // 初回ロード：Firestoreからデータ取得、空なら初期データを投入
+  // ────────────────────────────────────────────────
   useEffect(() => {
-    localStorage.setItem('customers', JSON.stringify(customers));
-  }, [customers]);
+    const loadData = async () => {
+      try {
+        const [custSnap, prodSnap, ordSnap] = await Promise.all([
+          getDocs(collection(db, 'customers')),
+          getDocs(collection(db, 'products')),
+          getDocs(collection(db, 'orders')),
+        ]);
 
-  useEffect(() => {
-    localStorage.setItem('products', JSON.stringify(products));
-  }, [products]);
+        // 顧客データ
+        if (custSnap.empty) {
+          await Promise.all(INITIAL_CUSTOMERS.map(c =>
+            setDoc(doc(db, 'customers', c.id), c)
+          ));
+          setCustomers(INITIAL_CUSTOMERS);
+        } else {
+          setCustomers(custSnap.docs.map(d => d.data() as Customer));
+        }
 
-  useEffect(() => {
-    localStorage.setItem('orders', JSON.stringify(orders));
-  }, [orders]);
+        // 商品データ
+        if (prodSnap.empty) {
+          await Promise.all(INITIAL_PRODUCTS.map(p =>
+            setDoc(doc(db, 'products', p.id), p)
+          ));
+          setProducts(INITIAL_PRODUCTS);
+        } else {
+          setProducts(prodSnap.docs.map(d => d.data() as Product));
+        }
 
-  // 設定の永続化
+        // 注文データ
+        if (ordSnap.empty) {
+          await Promise.all(INITIAL_ORDERS.map(o =>
+            setDoc(doc(db, 'orders', o.id), o)
+          ));
+          setOrders(INITIAL_ORDERS);
+        } else {
+          setOrders(ordSnap.docs.map(d => d.data() as Order));
+        }
+      } catch (error) {
+        console.error('Firestoreからのデータ読み込みエラー:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    loadData();
+  }, []);
+
+  // Googleカレンダー設定の永続化（localStorageのまま）
   useEffect(() => {
     localStorage.setItem('googleAccount', googleAccount);
     localStorage.setItem('googleCalendarId', googleCalendarId);
     localStorage.setItem('isGoogleLinked', JSON.stringify(isGoogleLinked));
   }, [googleAccount, googleCalendarId, isGoogleLinked]);
 
+  // ────────────────────────────────────────────────
+  // Firestore対応セッター（差分同期）
+  // 子コンポーネントに渡すsetCustomers/setProducts/setOrdersの代わりに使用
+  // ────────────────────────────────────────────────
+  const setCustomersFS = useCallback<React.Dispatch<React.SetStateAction<Customer[]>>>(
+    (updater) => {
+      setCustomers(prev => {
+        const next = typeof updater === 'function' ? updater(prev) : updater;
+        syncToFirestore('customers', prev, next);
+        return next;
+      });
+    },
+    []
+  );
+
+  const setProductsFS = useCallback<React.Dispatch<React.SetStateAction<Product[]>>>(
+    (updater) => {
+      setProducts(prev => {
+        const next = typeof updater === 'function' ? updater(prev) : updater;
+        syncToFirestore('products', prev, next);
+        return next;
+      });
+    },
+    []
+  );
+
+  const setOrdersFS = useCallback<React.Dispatch<React.SetStateAction<Order[]>>>(
+    (updater) => {
+      setOrders(prev => {
+        const next = typeof updater === 'function' ? updater(prev) : updater;
+        syncToFirestore('orders', prev, next);
+        return next;
+      });
+    },
+    []
+  );
+
+  // ────────────────────────────────────────────────
+  // ハンドラー
+  // ────────────────────────────────────────────────
   const handleSync = () => {
     setIsSyncing(true);
     setSyncDone(false);
@@ -107,16 +199,28 @@ const App: React.FC = () => {
     setIsOrderModalOpen(true);
   };
 
-  const handleSaveOrder = (newOrder: Order) => {
+  const handleSaveOrder = async (newOrder: Order) => {
     const oldOrder = selectedOrder;
-    // ステータスが「未出荷」から「出荷済」になった場合、在庫を減らす
     const isTransitioningToShipped = newOrder.status === 'Shipped' && (!oldOrder || oldOrder.status === 'Pending');
 
     if (isTransitioningToShipped) {
-      setProducts(prev => prev.map(p => {
+      // バッチ書き込みで注文と在庫を同時更新（整合性確保）
+      const batch = writeBatch(db);
+      const updatedProducts = products.map(p => {
         const item = newOrder.items.find(i => i.productId === p.id);
         return item ? { ...p, stock: p.stock - item.quantity } : p;
-      }));
+      });
+      updatedProducts.forEach(p => {
+        const orig = products.find(op => op.id === p.id);
+        if (orig && orig.stock !== p.stock) {
+          batch.set(doc(db, 'products', p.id), p);
+        }
+      });
+      batch.set(doc(db, 'orders', newOrder.id), newOrder);
+      await batch.commit();
+      setProducts(updatedProducts);
+    } else {
+      await setDoc(doc(db, 'orders', newOrder.id), newOrder);
     }
 
     if (selectedOrder) {
@@ -127,21 +231,33 @@ const App: React.FC = () => {
     setIsOrderModalOpen(false);
   };
 
-  const handleShipOrder = (orderId: string) => {
+  const handleShipOrder = async (orderId: string) => {
     const order = orders.find(o => o.id === orderId);
     if (!order || order.status === 'Shipped') return;
 
-    // 在庫減算
-    setProducts(prev => prev.map(p => {
+    // バッチ書き込みで注文ステータスと在庫を同時更新
+    const batch = writeBatch(db);
+    const updatedOrder = { ...order, status: 'Shipped' as const };
+    batch.set(doc(db, 'orders', orderId), updatedOrder);
+
+    const updatedProducts = products.map(p => {
       const item = order.items.find(i => i.productId === p.id);
       return item ? { ...p, stock: p.stock - item.quantity } : p;
-    }));
+    });
+    updatedProducts.forEach(p => {
+      const orig = products.find(op => op.id === p.id);
+      if (orig && orig.stock !== p.stock) {
+        batch.set(doc(db, 'products', p.id), p);
+      }
+    });
 
-    // ステータス更新
-    setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: 'Shipped' } : o));
+    await batch.commit();
+    setOrders(prev => prev.map(o => o.id === orderId ? updatedOrder : o));
+    setProducts(updatedProducts);
   };
 
-  const handleDeleteOrder = (orderId: string) => {
+  const handleDeleteOrder = async (orderId: string) => {
+    await deleteDoc(doc(db, 'orders', orderId));
     setOrders(prev => prev.filter(o => o.id !== orderId));
     setIsOrderModalOpen(false);
   };
@@ -152,7 +268,6 @@ const App: React.FC = () => {
       '注文ID': o.id,
       '顧客名': customers.find(c => c.id === o.customerId)?.name || '不明',
       '会社名': customers.find(c => c.id === o.customerId)?.company || '不明',
-      '商品名': products.find(p => p.id === o.productId)?.name || '不明',
       '数量': o.items.reduce((sum, item) => sum + item.quantity, 0),
       '合計金額': o.totalAmount,
       '注文日': o.orderDate,
@@ -200,11 +315,30 @@ const App: React.FC = () => {
     }
   };
 
+  // ────────────────────────────────────────────────
+  // ローディング画面
+  // ────────────────────────────────────────────────
+  if (isLoading) {
+    return (
+      <div className="flex h-screen items-center justify-center bg-slate-950">
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-12 h-12 bg-indigo-600 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-100/20">
+            <FileSpreadsheet className="text-white w-7 h-7" />
+          </div>
+          <div className="flex items-center gap-2 text-slate-400">
+            <Loader2 className="w-4 h-4 animate-spin" />
+            <span className="text-sm font-bold">データを読み込んでいます...</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className={`flex h-screen overflow-hidden font-sans transition-colors duration-300 ${isDarkMode ? 'bg-slate-900 text-slate-100' : 'bg-slate-950 text-slate-900'}`}>
       <aside 
         onClick={toggleSidebar}
-        className={`border-r flex flex-col shadow-2xl z-20 transition-all duration-500 ease-in-out cursor-pointer relative shrink-0 ${
+        className={`border-r flex flex-col shadow-2xl z-20 transition-all duration-500 ease-in-out cursor-pointer relative shrink-0 ${ 
           isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'
         } ${
           isContentVisible ? 'w-[15%]' : 'w-[99%]'
@@ -359,9 +493,9 @@ const App: React.FC = () => {
             <div className={`flex-1 overflow-auto custom-scrollbar p-4 sm:p-8 transition-colors ${isDarkMode ? 'bg-slate-900/50' : 'bg-slate-50/50'}`}>
               <div className="max-w-7xl mx-auto animate-in fade-in slide-in-from-right-8 duration-500 pb-12">
                 {activeTab === 'dashboard' && <Dashboard orders={orders} products={products} customers={customers} onNavigate={setActiveTab} />}
-                {activeTab === 'orders' && <OrderManager orders={orders} setOrders={setOrders} customers={customers} products={products} viewType={viewType} setViewType={setViewType} onEditOrder={openOrderModal} onShipOrder={handleShipOrder} />}
-                {activeTab === 'customers' && <CustomerManager customers={customers} setCustomers={setCustomers} />}
-                {activeTab === 'products' && <ProductManager products={products} setProducts={setProducts} orders={orders} />}
+                {activeTab === 'orders' && <OrderManager orders={orders} setOrders={setOrdersFS} customers={customers} products={products} viewType={viewType} setViewType={setViewType} onEditOrder={openOrderModal} onShipOrder={handleShipOrder} />}
+                {activeTab === 'customers' && <CustomerManager customers={customers} setCustomers={setCustomersFS} />}
+                {activeTab === 'products' && <ProductManager products={products} setProducts={setProductsFS} orders={orders} />}
                 {activeTab === 'calendar' && <OrderCalendar orders={orders} customers={customers} products={products} onEditOrder={openOrderModal} />}
                 {activeTab === 'insights' && <GeminiInsights orders={orders} products={products} />}
               </div>
