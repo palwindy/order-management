@@ -25,7 +25,7 @@ import * as XLSX from 'xlsx-js-style';
 import { db } from './firebase';
 import { collection, doc, setDoc, deleteDoc, getDocs, writeBatch } from 'firebase/firestore';
 
-const APP_VERSION = "Ver.1.42";
+const APP_VERSION = "Ver.1.44";
 const COMPANY_NAME = "注文管理システム";
 
 // Firestoreへの差分同期ヘルパー
@@ -276,8 +276,72 @@ const App: React.FC = () => {
         ];
 
         XLSX.utils.book_append_sheet(wb, ws, '注文一覧');
-        XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(customers), '顧客マスタ');
-        XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(products), '商品マスタ');
+
+        // --- 顧客マスタシート ---
+        const customerHeaders = ['顧客ID', '会社名', '担当者', '郵便番号', '住所', '電話番号', 'FAX番号', 'メール', '備考'];
+        const customerRows: any[][] = [customerHeaders];
+        customers.forEach(c => {
+            customerRows.push([
+                c.id,
+                c.company,
+                c.name,
+                c.zipCode ?? '',
+                c.address,
+                c.phone,
+                c.fax,
+                c.email,
+                c.notes ?? '',
+            ]);
+        });
+        const wsCustomers = XLSX.utils.aoa_to_sheet(customerRows);
+        const customerRange = XLSX.utils.decode_range(wsCustomers['!ref']!)
+        for (let R = customerRange.s.r; R <= customerRange.e.r; R++) {
+            for (let C = customerRange.s.c; C <= customerRange.e.c; C++) {
+                const cellAddr = XLSX.utils.encode_cell({ r: R, c: C });
+                if (!wsCustomers[cellAddr]) wsCustomers[cellAddr] = { v: '', t: 's' };
+                wsCustomers[cellAddr].s = {
+                    border: {
+                        top: { style: 'thin', color: { rgb: '000000' } },
+                        bottom: { style: 'thin', color: { rgb: '000000' } },
+                        left: { style: 'thin', color: { rgb: '000000' } },
+                        right: { style: 'thin', color: { rgb: '000000' } },
+                    },
+                    font: R === 0 ? { bold: true } : undefined,
+                    fill: R === 0 ? { fgColor: { rgb: 'E8EAF6' } } : undefined,
+                };
+            }
+        }
+        wsCustomers['!cols'] = [
+            { wch: 12 }, { wch: 20 }, { wch: 14 }, { wch: 10 }, { wch: 30 },
+            { wch: 14 }, { wch: 14 }, { wch: 24 }, { wch: 30 },
+        ];
+        XLSX.utils.book_append_sheet(wb, wsCustomers, '顧客管理');
+        
+        const productHeaders = ['商品ID', '商品名', '在庫数'];
+        const productRows: any[][] = [productHeaders];
+        products.forEach(p => {
+            productRows.push([p.id, p.name, p.stock]);
+        });
+        const wsProducts = XLSX.utils.aoa_to_sheet(productRows);
+        const productRange = XLSX.utils.decode_range(wsProducts['!ref']!);
+        for (let R = productRange.s.r; R <= productRange.e.r; R++) {
+            for (let C = productRange.s.c; C <= productRange.e.c; C++) {
+                const cellAddr = XLSX.utils.encode_cell({ r: R, c: C });
+                if (!wsProducts[cellAddr]) wsProducts[cellAddr] = { v: '', t: 's' };
+                wsProducts[cellAddr].s = {
+                    border: {
+                        top:    { style: 'thin', color: { rgb: '000000' } },
+                        bottom: { style: 'thin', color: { rgb: '000000' } },
+                        left:   { style: 'thin', color: { rgb: '000000' } },
+                        right:  { style: 'thin', color: { rgb: '000000' } },
+                    },
+                    font: R === 0 ? { bold: true } : undefined,
+                    fill: R === 0 ? { fgColor: { rgb: 'E8EAF6' } } : undefined,
+                };
+            }
+        }
+        wsProducts['!cols'] = [{ wch: 12 }, { wch: 24 }, { wch: 10 }];
+        XLSX.utils.book_append_sheet(wb, wsProducts, '商品管理');
 
         XLSX.writeFile(wb, fileName);
         alert("Excelファイルを出力しました。");
@@ -302,6 +366,7 @@ const App: React.FC = () => {
                 '出荷済': 'Shipped',
             };
 
+            // --- 注文一覧シート ---
             const orderSheet = workbook.Sheets['注文一覧'];
             if (orderSheet) {
                 const rows: any[][] = XLSX.utils.sheet_to_json(orderSheet, { header: 1 });
@@ -345,15 +410,38 @@ const App: React.FC = () => {
                 setOrdersFS(restoredOrders);
             }
 
-            const customerSheet = workbook.Sheets['顧客マスタ'];
+            // --- 顧客マスタシート ---
+            const customerSheet = workbook.Sheets['顧客管理'];
             if (customerSheet) {
-                const newCustomers: Customer[] = XLSX.utils.sheet_to_json(customerSheet);
+                const customerRowData: any[][] = XLSX.utils.sheet_to_json(customerSheet, { header: 1 });
+                const customerDataRows = customerRowData.slice(1);
+                const newCustomers: Customer[] = customerDataRows
+                    .filter(row => row[0])
+                    .map(row => ({
+                        id: String(row[0] ?? ''),
+                        company: String(row[1] ?? ''),
+                        name: String(row[2] ?? ''),
+                        zipCode: String(row[3] ?? ''),
+                        address: String(row[4] ?? ''),
+                        phone: String(row[5] ?? ''),
+                        fax: String(row[6] ?? ''),
+                        email: String(row[7] ?? ''),
+                        notes: String(row[8] ?? ''),
+                    }));
                 setCustomersFS(newCustomers);
             }
 
-            const productSheet = workbook.Sheets['商品マスタ'];
+            // --- 商品マスタシート ---
+            const productSheet = workbook.Sheets['商品管理'];
             if (productSheet) {
-                const newProducts: Product[] = XLSX.utils.sheet_to_json(productSheet);
+                const productRowData: any[][] = XLSX.utils.sheet_to_json(productSheet, { header: 1 });
+                const newProducts: Product[] = productRowData.slice(1)
+                    .filter(row => row[0])
+                    .map(row => ({
+                        id:    String(row[0] ?? ''),
+                        name:  String(row[1] ?? ''),
+                        stock: Number(row[2]) || 0,
+                    }));
                 setProductsFS(newProducts);
             }
 
