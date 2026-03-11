@@ -5,9 +5,6 @@ import {
   Calendar as CalendarIcon,
   BarChart3,
   ClipboardList,
-  FileEdit,
-  Truck,
-  Tags,
   Menu,
   X,
   Upload,
@@ -15,13 +12,6 @@ import {
   LogOut,
   Loader2,
   FileSpreadsheet,
-  CheckCircle,
-  Mail,
-  Hash,
-  Settings,
-  Moon,
-  Sun,
-  Globe
 } from 'lucide-react';
 import { Customer, Product, Order } from './types';
 import { INITIAL_CUSTOMERS, INITIAL_PRODUCTS, INITIAL_ORDERS } from './constants';
@@ -31,11 +21,11 @@ import ProductManager from './components/ProductManager';
 import OrderManager from './components/OrderManager';
 import OrderCalendar from './components/OrderCalendar';
 import OrderEditModal from './components/OrderEditModal';
-import * as XLSX from 'xlsx';
+import * as XLSX from 'xlsx-js-style';
 import { db } from './firebase';
 import { collection, doc, setDoc, deleteDoc, getDocs, writeBatch } from 'firebase/firestore';
 
-const APP_VERSION = "Ver.1.39";
+const APP_VERSION = "Ver.1.42";
 const COMPANY_NAME = "注文管理システム";
 
 // Firestoreへの差分同期ヘルパー
@@ -51,7 +41,6 @@ function syncToFirestore<T extends { id: string }>(
     const old = prev.find(p => p.id === n.id);
     return !old || JSON.stringify(old) !== JSON.stringify(n);
   });
-  // Firestoreのバッチ処理は500件までなので注意
   if (deletedIds.length > 0) {
     const batch = writeBatch(db);
     deletedIds.forEach(id => batch.delete(doc(db, collectionName, id)));
@@ -65,7 +54,7 @@ function syncToFirestore<T extends { id: string }>(
 }
 
 const App: React.FC = () => {
-  type TabId = 'orders' | 'input' | 'delivery' | 'master' | 'stats';
+  type TabId = 'orders' | 'calendar' | 'products' | 'customers' | 'stats';
   const [activeTab, setActiveTab] = useState<TabId>('orders');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   
@@ -194,14 +183,13 @@ const App: React.FC = () => {
       }
   };
 
-
   // ナビゲーション定義
   const navItems: { id: TabId; label: string; icon: React.ElementType }[] = [
-    { id: 'orders', label: '注文一覧', icon: ClipboardList },
-    { id: 'input', label: '注文入力', icon: FileEdit },
-    { id: 'delivery', label: '納品・請求', icon: Truck },
-    { id: 'master', label: 'マスタ管理', icon: Tags },
-    { id: 'stats', label: '集計・レポート', icon: BarChart3 },
+    { id: 'orders',    label: '注文管理',       icon: ClipboardList },
+    { id: 'calendar',  label: 'カレンダー',     icon: CalendarIcon },
+    { id: 'products',  label: '商品管理',       icon: Package },
+    { id: 'customers', label: '顧客管理',       icon: Users },
+    { id: 'stats',     label: '集計・レポート', icon: BarChart3 },
   ];
 
   const handleNavClick = (id: TabId) => {
@@ -209,92 +197,173 @@ const App: React.FC = () => {
     setIsSidebarOpen(false);
   };
   
-  // Excel出力
   const exportToExcel = () => {
     try {
-      const wb = XLSX.utils.book_new();
-      const ordersData = orders.map(o => ({
-        '注文ID': o.id, '顧客ID': o.customerId,
-        '顧客名': customers.find(c => c.id === o.customerId)?.name || '',
-        '合計金額': o.totalAmount, '注文日': o.orderDate, '出荷日': o.shippingDate,
-        '納品日': o.deliveryDate, 'ステータス': o.status, '備考': o.memo,
-        ...o.items.reduce((acc, item, index) => ({
-          ...acc,
-          [`商品ID_${index+1}`]: item.productId,
-          [`商品名_${index+1}`]: products.find(p => p.id === item.productId)?.name || '',
-          [`数量_${index+1}`]: item.quantity,
-          [`単価_${index+1}`]: item.unitPrice
-        }), {})
-      }));
-      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(ordersData), '注文一覧');
-      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(customers), '顧客マスタ');
-      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(products), '商品マスタ');
-      XLSX.writeFile(wb, `OrderMaster_Backup_${new Date().toISOString().split('T')[0]}.xlsx`);
-      alert("Excelファイルを出力しました。");
+        const today = new Date();
+        const year = today.getFullYear();
+        const dateStr = today.toISOString().split('T')[0];
+        const fileName = `${year}年注文管理（${dateStr}）.xlsx`;
+
+        const wb = XLSX.utils.book_new();
+        
+        const statusLabel: Record<string, string> = {
+            'Pending': '未出荷',
+            'Shipped': '出荷済',
+        };
+
+        // --- 注文一覧シート ---
+        const headers = ['注文ID', '顧客ID', '顧客名', '注文日', '出荷日', '納品日', 'ステータス', '商品ID', '商品名', '数量', '単価', '小計'];
+        const rows: any[][] = [headers];
+
+        orders.forEach(order => {
+            const customer = customers.find(c => c.id === order.customerId);
+            const customerName = customer?.name || '';
+
+            if (order.items.length === 0) {
+                rows.push([
+                    order.id, order.customerId, customerName,
+                    order.orderDate, order.shippingDate, order.deliveryDate,
+                    statusLabel[order.status] ?? order.status,
+                    '', '', '', '', ''
+                ]);
+            } else {
+                order.items.forEach((item, index) => {
+                    const product = products.find(p => p.id === item.productId);
+                    const productName = product?.name || '';
+                    const subtotal = item.quantity * item.unitPrice;
+
+                    if (index === 0) {
+                        rows.push([
+                            order.id, order.customerId, customerName,
+                            order.orderDate, order.shippingDate, order.deliveryDate,
+                            statusLabel[order.status] ?? order.status,
+                            item.productId, productName, item.quantity, item.unitPrice, subtotal
+                        ]);
+                    } else {
+                        rows.push([
+                            '', '', '', '', '', '',
+                            '',
+                            item.productId, productName, item.quantity, item.unitPrice, subtotal
+                        ]);
+                    }
+                });
+            }
+        });
+
+        const ws = XLSX.utils.aoa_to_sheet(rows);
+
+        const range = XLSX.utils.decode_range(ws['!ref']!)
+        for (let R = range.s.r; R <= range.e.r; R++) {
+            for (let C = range.s.c; C <= range.e.c; C++) {
+                const cellAddr = XLSX.utils.encode_cell({ r: R, c: C });
+                if (!ws[cellAddr]) ws[cellAddr] = { v: '', t: 's' };
+                ws[cellAddr].s = {
+                    border: {
+                        top: { style: 'thin', color: { rgb: '000000' } },
+                        bottom: { style: 'thin', color: { rgb: '000000' } },
+                        left: { style: 'thin', color: { rgb: '000000' } },
+                        right: { style: 'thin', color: { rgb: '000000' } },
+                    },
+                    font: R === 0 ? { bold: true } : undefined,
+                    fill: R === 0 ? { fgColor: { rgb: 'E8EAF6' } } : undefined,
+                };
+            }
+        }
+
+        ws['!cols'] = [
+            { wch: 12 }, { wch: 10 }, { wch: 16 }, { wch: 12 }, { wch: 12 }, { wch: 12 }, 
+            { wch: 10 }, { wch: 10 }, { wch: 20 }, { wch: 8 }, { wch: 10 }, { wch: 12 },
+        ];
+
+        XLSX.utils.book_append_sheet(wb, ws, '注文一覧');
+        XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(customers), '顧客マスタ');
+        XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(products), '商品マスタ');
+
+        XLSX.writeFile(wb, fileName);
+        alert("Excelファイルを出力しました。");
     } catch (e) {
-      console.error(e);
-      alert("Excelファイルの出力に失敗しました。");
+        console.error(e);
+        alert("Excelファイルの出力に失敗しました。");
     }
   };
 
-  // Excel読込
   const handleExcelImport = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
     const reader = new FileReader();
     reader.onload = (e) => {
-      try {
-        const data = new Uint8Array(e.target?.result as ArrayBuffer);
-        const workbook = XLSX.read(data, { type: 'array' });
-        
-        // 注文データの復元
-        const orderSheet = workbook.Sheets['注文一覧'];
-        if (orderSheet) {
-          const importedOrders: any[] = XLSX.utils.sheet_to_json(orderSheet);
-          const newOrders: Order[] = importedOrders.map(io => {
-            const items = [];
-            let i = 1;
-            while(io[`商品ID_${i}`]) {
-              items.push({
-                productId: io[`商品ID_${i}`],
-                quantity: io[`数量_${i}`],
-                unitPrice: io[`単価_${i}`],
-              });
-              i++;
-            }
-            return {
-              id: io['注文ID'], customerId: io['顧客ID'],
-              totalAmount: io['合計金額'], orderDate: io['注文日'],
-              shippingDate: io['出荷日'], deliveryDate: io['納品日'],
-              status: io['ステータス'], memo: io['備考'], items,
+        try {
+            const data = new Uint8Array(e.target?.result as ArrayBuffer);
+            const workbook = XLSX.read(data, { type: 'array' });
+
+            const statusReverse: Record<string, string> = {
+                '未出荷': 'Pending',
+                '出荷済': 'Shipped',
             };
-          });
-          setOrdersFS(newOrders);
-        }
 
-        // 顧客データの復元
-        const customerSheet = workbook.Sheets['顧客マスタ'];
-        if (customerSheet) {
-          const newCustomers: Customer[] = XLSX.utils.sheet_to_json(customerSheet);
-          setCustomersFS(newCustomers);
-        }
-        
-        // 商品データの復元
-        const productSheet = workbook.Sheets['商品マスタ'];
-        if (productSheet) {
-          const newProducts: Product[] = XLSX.utils.sheet_to_json(productSheet);
-          setProductsFS(newProducts);
-        }
+            const orderSheet = workbook.Sheets['注文一覧'];
+            if (orderSheet) {
+                const rows: any[][] = XLSX.utils.sheet_to_json(orderSheet, { header: 1 });
+                const dataRows = rows.slice(1);
+                const ordersMap = new Map<string, Order>();
 
-        alert("Excelからデータを復元しました。");
-      } catch (error) {
-        console.error("Excel import error:", error);
-        alert("Excelファイルの読み込みに失敗しました。");
-      } finally {
-        // 同じファイルを連続で選択できるようにvalueをリセット
-        if(fileInputRef.current) fileInputRef.current.value = "";
-      }
+                dataRows.forEach(row => {
+                    const [orderId, customerId, , orderDate, shippingDate, deliveryDate, statusJa, productId, , quantity, unitPrice] = row;
+                    const hasOrderInfo = orderId && String(orderId).trim() !== '';
+
+                    if (hasOrderInfo) {
+                        const newOrder: Order = {
+                            id: String(orderId), customerId: String(customerId),
+                            orderDate: String(orderDate || ''), shippingDate: String(shippingDate || ''),
+                            deliveryDate: String(deliveryDate || ''),
+                            status: (statusReverse[String(statusJa)] ?? 'Pending') as Order['status'],
+                            totalAmount: 0, items: [],
+                        };
+                        if (productId) {
+                            newOrder.items.push({
+                                productId: String(productId), quantity: Number(quantity) || 0,
+                                unitPrice: Number(unitPrice) || 0,
+                            });
+                        }
+                        ordersMap.set(String(orderId), newOrder);
+                    } else {
+                        const lastOrder = [...ordersMap.values()].at(-1);
+                        if (lastOrder && productId) {
+                            lastOrder.items.push({
+                                productId: String(productId), quantity: Number(quantity) || 0,
+                                unitPrice: Number(unitPrice) || 0,
+                            });
+                        }
+                    }
+                });
+
+                const restoredOrders: Order[] = [...ordersMap.values()].map(o => ({
+                    ...o,
+                    totalAmount: o.items.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0),
+                }));
+                setOrdersFS(restoredOrders);
+            }
+
+            const customerSheet = workbook.Sheets['顧客マスタ'];
+            if (customerSheet) {
+                const newCustomers: Customer[] = XLSX.utils.sheet_to_json(customerSheet);
+                setCustomersFS(newCustomers);
+            }
+
+            const productSheet = workbook.Sheets['商品マスタ'];
+            if (productSheet) {
+                const newProducts: Product[] = XLSX.utils.sheet_to_json(productSheet);
+                setProductsFS(newProducts);
+            }
+
+            alert("Excelからデータを復元しました。");
+        } catch (error) {
+            console.error("Excel import error:", error);
+            alert("Excelファイルの読み込みに失敗しました。");
+        } finally {
+            if (fileInputRef.current) fileInputRef.current.value = "";
+        }
     };
     reader.readAsArrayBuffer(file);
   };
@@ -319,7 +388,6 @@ const App: React.FC = () => {
 
   return (
     <div className="flex h-screen bg-slate-100 font-sans">
-      {/* Overlay for mobile */}
       {isSidebarOpen && (
         <div
           className="fixed inset-0 z-20 bg-slate-900/40 backdrop-blur-sm md:hidden"
@@ -327,7 +395,6 @@ const App: React.FC = () => {
         ></div>
       )}
 
-      {/* Sidebar */}
       <aside className={`fixed top-0 left-0 h-full w-48 bg-indigo-600 text-white flex flex-col z-30 transform transition-transform duration-300 ease-in-out md:translate-x-0 ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
         <div className="px-4 h-16 flex items-center">
           <h1 className="text-lg font-bold tracking-tight">{COMPANY_NAME}</h1>
@@ -371,7 +438,6 @@ const App: React.FC = () => {
         </div>
       </aside>
 
-      {/* Main content */}
       <div className="flex-1 flex flex-col md:ml-48">
         <header className="bg-white sticky top-0 h-16 flex items-center justify-between px-4 border-b z-10">
           <div className="flex items-center">
@@ -386,26 +452,19 @@ const App: React.FC = () => {
                 <h2 className="text-lg font-bold text-slate-800">{activeNavItem.label}</h2>
              </div>
           </div>
-          {/* Header content can be added here if needed */}
         </header>
 
         <main className="flex-1 overflow-y-auto p-3">
             <div className="w-full h-full">
                 {activeTab === 'stats' && <Dashboard orders={orders} products={products} customers={customers} onNavigate={(tab) => setActiveTab(tab as TabId)} />}
                 {activeTab === 'orders' && <OrderManager orders={orders} setOrders={setOrdersFS} customers={customers} products={products} viewType={'pre'} setViewType={() => {}} onEditOrder={openOrderModal} onShipOrder={handleShipOrder} />}
-                {activeTab === 'input' && <OrderManager orders={orders} setOrders={setOrdersFS} customers={customers} products={products} viewType={'pre'} setViewType={() => {}} onEditOrder={openOrderModal} onShipOrder={handleShipOrder} />}
-                {activeTab === 'delivery' && <OrderCalendar orders={orders} customers={customers} products={products} onEditOrder={openOrderModal} />}
-                {activeTab === 'master' && 
-                    <div className="space-y-6">
-                        <CustomerManager customers={customers} setCustomers={setCustomersFS} />
-                        <ProductManager products={products} setProducts={setProductsFS} orders={orders} />
-                    </div>
-                }
+                {activeTab === 'calendar' && <OrderCalendar orders={orders} customers={customers} products={products} onEditOrder={openOrderModal} />}
+                {activeTab === 'products'  && <ProductManager products={products} setProducts={setProductsFS} orders={orders} />}
+                {activeTab === 'customers' && <CustomerManager customers={customers} setCustomers={setCustomersFS} />}
             </div>
         </main>
       </div>
       
-      {/* Shared Edit Modal */}
       {isOrderModalOpen && (
         <OrderEditModal
           isOpen={isOrderModalOpen}

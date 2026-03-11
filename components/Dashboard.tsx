@@ -12,13 +12,13 @@ import {
   PieChart,
   Pie
 } from 'recharts';
-import { TrendingUp, ShoppingBag, Users, DollarSign, ArrowRight } from 'lucide-react';
+import { TrendingUp, ShoppingBag, Users, DollarSign, ArrowRight, Package } from 'lucide-react';
 
 interface Props {
   orders: Order[];
   products: Product[];
   customers: Customer[];
-  onNavigate: (tab: 'orders' | 'input' | 'delivery' | 'master' | 'stats') => void;
+  onNavigate: (tab: 'orders' | 'calendar' | 'products' | 'customers' | 'stats') => void;
 }
 
 const Dashboard: React.FC<Props> = ({ orders, products, customers, onNavigate }) => {
@@ -68,8 +68,8 @@ const Dashboard: React.FC<Props> = ({ orders, products, customers, onNavigate })
   const statItems = [
     { label: '総売上金額', value: `¥${stats.totalSales.toLocaleString()}`, icon: DollarSign, color: 'text-emerald-600', bg: 'bg-emerald-50', target: 'orders' as const },
     { label: '未出荷の案件', value: stats.activeOrders, icon: ShoppingBag, color: 'text-indigo-600', bg: 'bg-indigo-50', target: 'orders' as const },
-    { label: '取引先数', value: stats.customerCount, icon: Users, color: 'text-amber-600', bg: 'bg-amber-50', target: 'master' as const },
-    { label: 'アイテム数', value: stats.productCount, icon: TrendingUp, color: 'text-violet-600', bg: 'bg-violet-50', target: 'master' as const },
+    { label: '取引先数', value: stats.customerCount, icon: Users, color: 'text-amber-600', bg: 'bg-amber-50', target: 'customers' as const },
+    { label: 'アイテム数', value: stats.productCount, icon: Package, color: 'text-violet-600', bg: 'bg-violet-50', target: 'products' as const },
   ];
 
   return (
