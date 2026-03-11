@@ -1,22 +1,27 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { 
-  Users, 
-  Package, 
-  ShoppingCart, 
-  Calendar as CalendarIcon, 
-  LayoutDashboard, 
-  FileSpreadsheet, 
-  Download,
-  Settings,
-  ChevronRight,
-  Moon,
-  Sun,
-  Globe,
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import {
+  Users,
+  Package,
+  Calendar as CalendarIcon,
+  BarChart3,
+  ClipboardList,
+  FileEdit,
+  Truck,
+  Tags,
+  Menu,
   X,
+  Upload,
+  Download,
+  LogOut,
   Loader2,
+  FileSpreadsheet,
   CheckCircle,
   Mail,
-  Hash
+  Hash,
+  Settings,
+  Moon,
+  Sun,
+  Globe
 } from 'lucide-react';
 import { Customer, Product, Order } from './types';
 import { INITIAL_CUSTOMERS, INITIAL_PRODUCTS, INITIAL_ORDERS } from './constants';
@@ -30,64 +35,51 @@ import * as XLSX from 'xlsx';
 import { db } from './firebase';
 import { collection, doc, setDoc, deleteDoc, getDocs, writeBatch } from 'firebase/firestore';
 
-const APP_VERSION = "Ver.1.36";
-const COMPANY_NAME = "裏白本舗";
+const APP_VERSION = "Ver.1.39";
+const COMPANY_NAME = "注文管理システム";
 
-// ────────────────────────────────────────────────
-// Firestoreへの差分同期ヘルパー（追加・更新・削除を自動検出）
-// ────────────────────────────────────────────────
+// Firestoreへの差分同期ヘルパー
 function syncToFirestore<T extends { id: string }>(
   collectionName: string,
   prev: T[],
   next: T[]
 ) {
-  // 削除されたドキュメントを検出して削除
   const deletedIds = prev
     .filter(p => !next.find(n => n.id === p.id))
     .map(p => p.id);
-  // 追加・更新されたドキュメントを検出してupsert
   const upserted = next.filter(n => {
     const old = prev.find(p => p.id === n.id);
     return !old || JSON.stringify(old) !== JSON.stringify(n);
   });
-  deletedIds.forEach(id => deleteDoc(doc(db, collectionName, id)));
-  upserted.forEach(item => setDoc(doc(db, collectionName, item.id), item));
+  // Firestoreのバッチ処理は500件までなので注意
+  if (deletedIds.length > 0) {
+    const batch = writeBatch(db);
+    deletedIds.forEach(id => batch.delete(doc(db, collectionName, id)));
+    batch.commit();
+  }
+  if (upserted.length > 0) {
+    const batch = writeBatch(db);
+    upserted.forEach(item => batch.set(doc(db, collectionName, item.id), item));
+    batch.commit();
+  }
 }
 
 const App: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'orders' | 'products' | 'customers' | 'calendar' | 'dashboard'>('orders');
-  const [viewType, setViewType] = useState<'pre' | 'post'>('pre');
-  const [isContentVisible, setIsContentVisible] = useState(false);
-  const [isDarkMode, setIsDarkMode] = useState(false);
-  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const [isSyncing, setIsSyncing] = useState(false);
-  const [syncDone, setSyncDone] = useState(false);
+  type TabId = 'orders' | 'input' | 'delivery' | 'master' | 'stats';
+  const [activeTab, setActiveTab] = useState<TabId>('orders');
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  
   const [isLoading, setIsLoading] = useState(true);
-
-  // Googleカレンダー設定はUI設定なのでlocalStorageのまま
-  const [googleAccount, setGoogleAccount] = useState(() => {
-    return localStorage.getItem('googleAccount') || 'example@gmail.com';
-  });
-  const [googleCalendarId, setGoogleCalendarId] = useState(() => {
-    return localStorage.getItem('googleCalendarId') || '出荷用';
-  });
-  const [isGoogleLinked, setIsGoogleLinked] = useState(() => {
-    const saved = localStorage.getItem('isGoogleLinked');
-    return saved !== null ? JSON.parse(saved) : true;
-  });
-
-  // 注文編集用グローバルステート
   const [isOrderModalOpen, setIsOrderModalOpen] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
 
-  // データはFirestoreから読み込む（初期値は空配列）
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
 
-  // ────────────────────────────────────────────────
-  // 初回ロード：Firestoreからデータ取得、空なら初期データを投入
-  // ────────────────────────────────────────────────
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // 初回ロード
   useEffect(() => {
     const loadData = async () => {
       try {
@@ -96,38 +88,33 @@ const App: React.FC = () => {
           getDocs(collection(db, 'products')),
           getDocs(collection(db, 'orders')),
         ]);
-
-        // 顧客データ
         if (custSnap.empty) {
-          await Promise.all(INITIAL_CUSTOMERS.map(c =>
-            setDoc(doc(db, 'customers', c.id), c)
-          ));
+          const batch = writeBatch(db);
+          INITIAL_CUSTOMERS.forEach(c => batch.set(doc(db, 'customers', c.id), c));
+          await batch.commit();
           setCustomers(INITIAL_CUSTOMERS);
         } else {
           setCustomers(custSnap.docs.map(d => d.data() as Customer));
         }
-
-        // 商品データ
         if (prodSnap.empty) {
-          await Promise.all(INITIAL_PRODUCTS.map(p =>
-            setDoc(doc(db, 'products', p.id), p)
-          ));
+          const batch = writeBatch(db);
+          INITIAL_PRODUCTS.forEach(p => batch.set(doc(db, 'products', p.id), p));
+          await batch.commit();
           setProducts(INITIAL_PRODUCTS);
         } else {
           setProducts(prodSnap.docs.map(d => d.data() as Product));
         }
-
-        // 注文データ
         if (ordSnap.empty) {
-          await Promise.all(INITIAL_ORDERS.map(o =>
-            setDoc(doc(db, 'orders', o.id), o)
-          ));
+          const batch = writeBatch(db);
+          INITIAL_ORDERS.forEach(o => batch.set(doc(db, 'orders', o.id), o));
+          await batch.commit();
           setOrders(INITIAL_ORDERS);
         } else {
           setOrders(ordSnap.docs.map(d => d.data() as Order));
         }
       } catch (error) {
         console.error('Firestoreからのデータ読み込みエラー:', error);
+        alert('データの読み込みに失敗しました。');
       } finally {
         setIsLoading(false);
       }
@@ -135,196 +122,195 @@ const App: React.FC = () => {
     loadData();
   }, []);
 
-  // Googleカレンダー設定の永続化（localStorageのまま）
-  useEffect(() => {
-    localStorage.setItem('googleAccount', googleAccount);
-    localStorage.setItem('googleCalendarId', googleCalendarId);
-    localStorage.setItem('isGoogleLinked', JSON.stringify(isGoogleLinked));
-  }, [googleAccount, googleCalendarId, isGoogleLinked]);
+  // Firestore対応セッター
+  const setCustomersFS = useCallback((updater: React.SetStateAction<Customer[]>) => {
+    setCustomers(prev => {
+      const next = typeof updater === 'function' ? updater(prev) : updater;
+      syncToFirestore('customers', prev, next);
+      return next;
+    });
+  }, []);
 
-  // ────────────────────────────────────────────────
-  // Firestore対応セッター（差分同期）
-  // 子コンポーネントに渡すsetCustomers/setProducts/setOrdersの代わりに使用
-  // ────────────────────────────────────────────────
-  const setCustomersFS = useCallback<React.Dispatch<React.SetStateAction<Customer[]>>>(
-    (updater) => {
-      setCustomers(prev => {
-        const next = typeof updater === 'function' ? updater(prev) : updater;
-        syncToFirestore('customers', prev, next);
-        return next;
-      });
-    },
-    []
-  );
+  const setProductsFS = useCallback((updater: React.SetStateAction<Product[]>) => {
+    setProducts(prev => {
+      const next = typeof updater === 'function' ? updater(prev) : updater;
+      syncToFirestore('products', prev, next);
+      return next;
+    });
+  }, []);
 
-  const setProductsFS = useCallback<React.Dispatch<React.SetStateAction<Product[]>>>(
-    (updater) => {
-      setProducts(prev => {
-        const next = typeof updater === 'function' ? updater(prev) : updater;
-        syncToFirestore('products', prev, next);
-        return next;
-      });
-    },
-    []
-  );
-
-  const setOrdersFS = useCallback<React.Dispatch<React.SetStateAction<Order[]>>>(
-    (updater) => {
-      setOrders(prev => {
-        const next = typeof updater === 'function' ? updater(prev) : updater;
-        syncToFirestore('orders', prev, next);
-        return next;
-      });
-    },
-    []
-  );
-
-  // ────────────────────────────────────────────────
-  // ハンドラー
-  // ────────────────────────────────────────────────
-  const handleSync = () => {
-    setIsSyncing(true);
-    setSyncDone(false);
-    setTimeout(() => {
-      setIsSyncing(false);
-      setSyncDone(true);
-      setTimeout(() => setSyncDone(false), 3000);
-    }, 2000);
-  };
+  const setOrdersFS = useCallback((updater: React.SetStateAction<Order[]>) => {
+    setOrders(prev => {
+      const next = typeof updater === 'function' ? updater(prev) : updater;
+      syncToFirestore('orders', prev, next);
+      return next;
+    });
+  }, []);
 
   const openOrderModal = (order: Order | null) => {
     setSelectedOrder(order);
     setIsOrderModalOpen(true);
   };
-
+  
   const handleSaveOrder = async (newOrder: Order) => {
-    const oldOrder = selectedOrder;
-    const isTransitioningToShipped = newOrder.status === 'Shipped' && (!oldOrder || oldOrder.status === 'Pending');
-
-    if (isTransitioningToShipped) {
-      // バッチ書き込みで注文と在庫を同時更新（整合性確保）
-      const batch = writeBatch(db);
-      const updatedProducts = products.map(p => {
-        const item = newOrder.items.find(i => i.productId === p.id);
-        return item ? { ...p, stock: p.stock - item.quantity } : p;
-      });
-      updatedProducts.forEach(p => {
-        const orig = products.find(op => op.id === p.id);
-        if (orig && orig.stock !== p.stock) {
-          batch.set(doc(db, 'products', p.id), p);
-        }
-      });
-      batch.set(doc(db, 'orders', newOrder.id), newOrder);
-      await batch.commit();
-      setProducts(updatedProducts);
-    } else {
-      await setDoc(doc(db, 'orders', newOrder.id), newOrder);
-    }
-
     if (selectedOrder) {
-      setOrders(prev => prev.map(o => o.id === selectedOrder.id ? newOrder : o));
+      setOrdersFS(prev => prev.map(o => o.id === selectedOrder.id ? newOrder : o));
     } else {
-      setOrders(prev => [newOrder, ...prev]);
+      setOrdersFS(prev => [newOrder, ...prev]);
     }
     setIsOrderModalOpen(false);
   };
-
-  const handleShipOrder = async (orderId: string) => {
-    const order = orders.find(o => o.id === orderId);
-    if (!order || order.status === 'Shipped') return;
-
-    // バッチ書き込みで注文ステータスと在庫を同時更新
-    const batch = writeBatch(db);
-    const updatedOrder = { ...order, status: 'Shipped' as const };
-    batch.set(doc(db, 'orders', orderId), updatedOrder);
-
-    const updatedProducts = products.map(p => {
-      const item = order.items.find(i => i.productId === p.id);
-      return item ? { ...p, stock: p.stock - item.quantity } : p;
-    });
-    updatedProducts.forEach(p => {
-      const orig = products.find(op => op.id === p.id);
-      if (orig && orig.stock !== p.stock) {
-        batch.set(doc(db, 'products', p.id), p);
-      }
-    });
-
-    await batch.commit();
-    setOrders(prev => prev.map(o => o.id === orderId ? updatedOrder : o));
-    setProducts(updatedProducts);
-  };
-
+  
   const handleDeleteOrder = async (orderId: string) => {
-    await deleteDoc(doc(db, 'orders', orderId));
-    setOrders(prev => prev.filter(o => o.id !== orderId));
+    setOrdersFS(prev => prev.filter(o => o.id !== orderId));
     setIsOrderModalOpen(false);
   };
-
-  const exportToExcel = () => {
-    const wb = XLSX.utils.book_new();
-    const ordersData = orders.map(o => ({
-      '注文ID': o.id,
-      '顧客名': customers.find(c => c.id === o.customerId)?.name || '不明',
-      '会社名': customers.find(c => c.id === o.customerId)?.company || '不明',
-      '数量': o.items.reduce((sum, item) => sum + item.quantity, 0),
-      '合計金額': o.totalAmount,
-      '注文日': o.orderDate,
-      '出荷日': o.shippingDate,
-      '納品日': o.deliveryDate,
-      'ステータス': o.status
-    }));
-    const wsOrders = XLSX.utils.json_to_sheet(ordersData);
-    XLSX.utils.book_append_sheet(wb, wsOrders, '注文一覧');
-
-    const customersData = customers.map(c => ({
-      '名前': c.name,
-      '会社名': c.company,
-      'メール': c.email,
-      '電話番号': c.phone,
-      'FAX番号': c.fax,
-      '郵便番号': c.zipCode || '',
-      '住所': c.address,
-      '備考': c.notes || ''
-    }));
-    const wsCustomers = XLSX.utils.json_to_sheet(customersData);
-    XLSX.utils.book_append_sheet(wb, wsCustomers, '顧客一覧');
-
-    XLSX.writeFile(wb, `${COMPANY_NAME}_Export_${new Date().toISOString().split('T')[0]}.xlsx`);
+  
+  const handleShipOrder = async (orderId: string) => {
+      const order = orders.find(o => o.id === orderId);
+      if (!order || order.status === 'Shipped') return;
+      
+      const batch = writeBatch(db);
+      const updatedOrder = { ...order, status: 'Shipped' as const };
+      batch.set(doc(db, 'orders', orderId), updatedOrder);
+      
+      const updatedProducts = [...products];
+      let productUpdated = false;
+      for (const item of order.items) {
+          const productIndex = updatedProducts.findIndex(p => p.id === item.productId);
+          if (productIndex !== -1) {
+              const newStock = updatedProducts[productIndex].stock - item.quantity;
+              updatedProducts[productIndex] = { ...updatedProducts[productIndex], stock: newStock };
+              batch.update(doc(db, 'products', item.productId), { stock: newStock });
+              productUpdated = true;
+          }
+      }
+      
+      await batch.commit();
+      
+      setOrders(prev => prev.map(o => o.id === orderId ? updatedOrder : o));
+      if(productUpdated) {
+          setProducts(updatedProducts);
+      }
   };
 
-  const navItems = [
-    { id: 'orders', label: '注文管理', icon: ShoppingCart },
-    { id: 'calendar', label: 'カレンダー', icon: CalendarIcon },
-    { id: 'products', label: '商品管理', icon: Package },
-    { id: 'customers', label: '顧客管理', icon: Users },
-    { id: 'dashboard', label: 'ダッシュボード', icon: LayoutDashboard },
-  ] as const;
 
-  const handleNavClick = (id: typeof activeTab) => {
+  // ナビゲーション定義
+  const navItems: { id: TabId; label: string; icon: React.ElementType }[] = [
+    { id: 'orders', label: '注文一覧', icon: ClipboardList },
+    { id: 'input', label: '注文入力', icon: FileEdit },
+    { id: 'delivery', label: '納品・請求', icon: Truck },
+    { id: 'master', label: 'マスタ管理', icon: Tags },
+    { id: 'stats', label: '集計・レポート', icon: BarChart3 },
+  ];
+
+  const handleNavClick = (id: TabId) => {
     setActiveTab(id);
-    setIsContentVisible(true);
+    setIsSidebarOpen(false);
   };
-
-  const toggleSidebar = (e: React.MouseEvent) => {
-    if ((e.target as HTMLElement).closest('button')) return;
-    if (isContentVisible) {
-      setIsContentVisible(false);
+  
+  // Excel出力
+  const exportToExcel = () => {
+    try {
+      const wb = XLSX.utils.book_new();
+      const ordersData = orders.map(o => ({
+        '注文ID': o.id, '顧客ID': o.customerId,
+        '顧客名': customers.find(c => c.id === o.customerId)?.name || '',
+        '合計金額': o.totalAmount, '注文日': o.orderDate, '出荷日': o.shippingDate,
+        '納品日': o.deliveryDate, 'ステータス': o.status, '備考': o.memo,
+        ...o.items.reduce((acc, item, index) => ({
+          ...acc,
+          [`商品ID_${index+1}`]: item.productId,
+          [`商品名_${index+1}`]: products.find(p => p.id === item.productId)?.name || '',
+          [`数量_${index+1}`]: item.quantity,
+          [`単価_${index+1}`]: item.unitPrice
+        }), {})
+      }));
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(ordersData), '注文一覧');
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(customers), '顧客マスタ');
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(products), '商品マスタ');
+      XLSX.writeFile(wb, `OrderMaster_Backup_${new Date().toISOString().split('T')[0]}.xlsx`);
+      alert("Excelファイルを出力しました。");
+    } catch (e) {
+      console.error(e);
+      alert("Excelファイルの出力に失敗しました。");
     }
   };
 
-  // ────────────────────────────────────────────────
-  // ローディング画面
-  // ────────────────────────────────────────────────
+  // Excel読込
+  const handleExcelImport = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const data = new Uint8Array(e.target?.result as ArrayBuffer);
+        const workbook = XLSX.read(data, { type: 'array' });
+        
+        // 注文データの復元
+        const orderSheet = workbook.Sheets['注文一覧'];
+        if (orderSheet) {
+          const importedOrders: any[] = XLSX.utils.sheet_to_json(orderSheet);
+          const newOrders: Order[] = importedOrders.map(io => {
+            const items = [];
+            let i = 1;
+            while(io[`商品ID_${i}`]) {
+              items.push({
+                productId: io[`商品ID_${i}`],
+                quantity: io[`数量_${i}`],
+                unitPrice: io[`単価_${i}`],
+              });
+              i++;
+            }
+            return {
+              id: io['注文ID'], customerId: io['顧客ID'],
+              totalAmount: io['合計金額'], orderDate: io['注文日'],
+              shippingDate: io['出荷日'], deliveryDate: io['納品日'],
+              status: io['ステータス'], memo: io['備考'], items,
+            };
+          });
+          setOrdersFS(newOrders);
+        }
+
+        // 顧客データの復元
+        const customerSheet = workbook.Sheets['顧客マスタ'];
+        if (customerSheet) {
+          const newCustomers: Customer[] = XLSX.utils.sheet_to_json(customerSheet);
+          setCustomersFS(newCustomers);
+        }
+        
+        // 商品データの復元
+        const productSheet = workbook.Sheets['商品マスタ'];
+        if (productSheet) {
+          const newProducts: Product[] = XLSX.utils.sheet_to_json(productSheet);
+          setProductsFS(newProducts);
+        }
+
+        alert("Excelからデータを復元しました。");
+      } catch (error) {
+        console.error("Excel import error:", error);
+        alert("Excelファイルの読み込みに失敗しました。");
+      } finally {
+        // 同じファイルを連続で選択できるようにvalueをリセット
+        if(fileInputRef.current) fileInputRef.current.value = "";
+      }
+    };
+    reader.readAsArrayBuffer(file);
+  };
+
+  const activeNavItem = navItems.find(item => item.id === activeTab)!;
+
   if (isLoading) {
     return (
-      <div className="flex h-screen items-center justify-center bg-slate-950">
+      <div className="flex h-screen items-center justify-center bg-slate-900">
         <div className="flex flex-col items-center gap-4">
-          <div className="w-12 h-12 bg-indigo-600 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-100/20">
+          <div className="w-12 h-12 bg-indigo-600 rounded-xl flex items-center justify-center">
             <FileSpreadsheet className="text-white w-7 h-7" />
           </div>
-          <div className="flex items-center gap-2 text-slate-400">
+          <div className="flex items-center gap-2 text-slate-300">
             <Loader2 className="w-4 h-4 animate-spin" />
-            <span className="text-sm font-bold">データを読み込んでいます...</span>
+            <span>データを読み込んでいます...</span>
           </div>
         </div>
       </div>
@@ -332,180 +318,96 @@ const App: React.FC = () => {
   }
 
   return (
-    <div className={`flex h-screen overflow-hidden font-sans transition-colors duration-300 ${isDarkMode ? 'bg-slate-900 text-slate-100' : 'bg-slate-950 text-slate-900'}`}>
-      <aside 
-        onClick={toggleSidebar}
-        className={`border-r flex flex-col shadow-2xl z-20 transition-all duration-500 ease-in-out cursor-pointer relative shrink-0 ${ 
-          isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'
-        } ${
-          isContentVisible ? 'w-[15%]' : 'w-[99%]'
-        }`}
-      >
-        <div className={`flex items-center transition-all duration-500 ${isContentVisible ? 'justify-center py-4 px-2' : 'justify-start p-6 mb-2 gap-4'}`}>
-          <div className="w-11 h-11 bg-indigo-600 rounded-xl flex items-center justify-center shrink-0 shadow-lg shadow-indigo-100/20">
-            <FileSpreadsheet className="text-white w-6 h-6" />
-          </div>
-          {!isContentVisible && (
-            <div className="flex-1 flex items-center justify-between animate-in fade-in slide-in-from-left-4 duration-700 min-w-0">
-              <div className="min-w-0">
-                <h1 className={`text-3xl font-black tracking-tight whitespace-nowrap overflow-hidden text-ellipsis ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>注文管理システム</h1>
-                <p className="text-sm text-indigo-400 font-bold tracking-widest uppercase">Smart Management</p>
-              </div>
-              <button 
-                onClick={(e) => { e.stopPropagation(); setIsSettingsOpen(true); }}
-                className={`p-3 rounded-2xl transition-all ml-4 ${isDarkMode ? 'bg-slate-700 text-slate-300 hover:text-white' : 'bg-slate-50 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50'}`}
-              >
-                <Settings className="w-8 h-8" />
-              </button>
-            </div>
-          )}
+    <div className="flex h-screen bg-slate-100 font-sans">
+      {/* Overlay for mobile */}
+      {isSidebarOpen && (
+        <div
+          className="fixed inset-0 z-20 bg-slate-900/40 backdrop-blur-sm md:hidden"
+          onClick={() => setIsSidebarOpen(false)}
+        ></div>
+      )}
+
+      {/* Sidebar */}
+      <aside className={`fixed top-0 left-0 h-full w-48 bg-indigo-600 text-white flex flex-col z-30 transform transition-transform duration-300 ease-in-out md:translate-x-0 ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+        <div className="px-4 h-16 flex items-center">
+          <h1 className="text-lg font-bold tracking-tight">{COMPANY_NAME}</h1>
         </div>
         
-        <nav className={`flex-1 flex flex-col overflow-y-auto custom-scrollbar ${isContentVisible ? 'mt-2 px-1 space-y-2 items-center' : 'justify-center max-w-2xl mx-auto w-full px-6 space-y-1.5 pb-6'}`}>
-          {navItems.map((item) => (
+        <nav className="flex-1 px-2 py-4 space-y-1">
+          {navItems.map(item => (
             <button
               key={item.id}
               onClick={() => handleNavClick(item.id)}
-              className={`group w-full flex items-center rounded-xl transition-all duration-300 ${
-                isContentVisible 
-                ? `justify-center w-11 h-11 ${activeTab === item.id ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-100/20' : isDarkMode ? 'text-slate-400 hover:bg-slate-700' : 'text-slate-500 hover:bg-slate-50'}` 
-                : `px-8 py-3.5 text-2xl font-bold bg-slate-50 text-slate-700 hover:bg-indigo-50 hover:text-indigo-700 hover:scale-[1.01] border border-transparent hover:border-indigo-100 shadow-sm ${isDarkMode ? 'bg-slate-700 text-slate-100 hover:bg-slate-600' : ''}`
+              className={`w-full flex items-center px-3 py-2.5 text-sm font-medium rounded-md transition-colors ${
+                activeTab === item.id
+                  ? 'bg-indigo-700'
+                  : 'text-indigo-200 hover:bg-indigo-500'
               }`}
             >
-              <div className={`flex items-center justify-center shrink-0 ${isContentVisible ? 'w-full h-full' : 'w-12 h-12'}`}>
-                <item.icon className={`transition-transform group-hover:scale-110 ${isContentVisible ? 'w-5 h-5' : 'w-10 h-10'}`} />
-              </div>
-              {!isContentVisible && (
-                <>
-                  <span className="truncate flex-1 text-left whitespace-nowrap ml-1 text-2xl font-black">{item.label}</span>
-                  <ChevronRight className="w-8 h-8 opacity-20 group-hover:opacity-100 group-hover:translate-x-2 transition-all" />
-                </>
-              )}
+              <item.icon className="w-5 h-5 mr-3" />
+              <span className="truncate">{item.label}</span>
             </button>
           ))}
         </nav>
 
-        <div className={`p-4 border-t flex flex-col items-center gap-3 ${isDarkMode ? 'border-slate-700 bg-slate-800/50' : 'border-slate-100 bg-slate-50/50'} ${!isContentVisible ? 'pb-8' : ''}`}>
-          {!isContentVisible ? (
-            <div className="w-full flex items-center justify-start gap-12 overflow-hidden pl-2">
-              <span className="text-sm font-black text-slate-300 opacity-60 tracking-widest whitespace-nowrap">{APP_VERSION}</span>
-              <button 
-                onClick={(e) => { e.stopPropagation(); exportToExcel(); }}
-                className="flex-1 max-w-sm flex items-center justify-center gap-3 bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-700 hover:to-emerald-600 text-white rounded-2xl transition-all font-bold shadow-lg shadow-emerald-100/10 active:scale-95 py-5 text-xl whitespace-nowrap"
-              >
-                <Download className="w-6 h-6" />
-                Excel出力
-              </button>
-              <span className="text-sm font-black text-slate-400 opacity-80 tracking-widest whitespace-nowrap">{COMPANY_NAME}</span>
-            </div>
-          ) : (
-            <>
-              <button 
-                onClick={(e) => { e.stopPropagation(); setIsSettingsOpen(true); }}
-                className={`w-11 h-11 flex items-center justify-center rounded-xl transition-all shadow-sm ${isDarkMode ? 'bg-slate-700 text-slate-300 hover:bg-slate-600' : 'bg-slate-100 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50'}`}
-              >
-                <Settings className="w-5 h-5" />
-              </button>
-              <button 
-                onClick={(e) => { e.stopPropagation(); exportToExcel(); }}
-                className="w-11 h-11 flex items-center justify-center bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-700 hover:to-emerald-600 text-white rounded-xl transition-all shadow-lg shadow-emerald-900/20 active:scale-95"
-              >
-                <Download className="w-5 h-5" />
-              </button>
-              <div className="flex flex-col items-start gap-0.5 w-full pt-2">
-                <span className="text-[9px] font-black text-slate-400 tracking-wider whitespace-nowrap opacity-60 text-left">{APP_VERSION}</span>
-                <span className={`text-[10px] font-black tracking-tighter whitespace-nowrap border-t w-full text-left pt-1 ${isDarkMode ? 'text-slate-300 border-slate-700' : 'text-slate-500 border-slate-200'}`}>
-                  {COMPANY_NAME}
-                </span>
-              </div>
-            </>
-          )}
+        <div className="px-2 py-3 border-t border-indigo-500/50">
+           <input type="file" accept=".xlsx, .xls" ref={fileInputRef} onChange={handleExcelImport} className="hidden" />
+           <button onClick={() => fileInputRef.current?.click()} className="w-full flex items-center px-3 py-2.5 text-sm font-medium rounded-md text-indigo-200 hover:bg-indigo-500">
+             <Upload className="w-5 h-5 mr-3" />
+             <span>Excel読込</span>
+           </button>
+           <button onClick={exportToExcel} className="w-full flex items-center px-3 py-2.5 text-sm font-medium rounded-md text-indigo-200 hover:bg-indigo-500">
+             <Download className="w-5 h-5 mr-3" />
+             <span>Excel出力</span>
+           </button>
+           <button className="w-full flex items-center px-3 py-2.5 text-sm font-medium rounded-md text-red-200 hover:bg-red-500/30">
+             <LogOut className="w-5 h-5 mr-3" />
+             <span>ログアウト</span>
+           </button>
+        </div>
+
+        <div className="px-4 py-2 text-center">
+          <span className="text-[9px] font-mono opacity-60">{APP_VERSION}</span>
         </div>
       </aside>
 
-      <main 
-        className={`flex flex-col min-w-0 overflow-hidden transition-all duration-500 ease-in-out ${isDarkMode ? 'bg-slate-900' : 'bg-slate-50'} ${
-          isContentVisible ? 'w-[85%]' : 'w-[1%]'
-        }`}
-      >
-        {isContentVisible ? (
-          <>
-            <header className={`h-16 border-b flex items-center justify-between px-6 sm:px-10 shrink-0 transition-colors ${isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'}`}>
-              <div className="flex items-center gap-3 sm:gap-4 flex-1 min-w-0 pr-4">
-                <div className={`p-1.5 sm:p-2 rounded-lg shrink-0 ${isDarkMode ? 'bg-slate-700' : 'bg-indigo-50'}`}>
-                   {React.createElement(navItems.find(n => n.id === activeTab)?.icon || LayoutDashboard, { className: "w-4 h-4 sm:w-5 sm:h-5 text-indigo-500" })}
-                </div>
-                <h2 className={`text-base sm:text-xl font-black tracking-tight whitespace-nowrap overflow-hidden text-ellipsis ${isDarkMode ? 'text-white' : 'text-slate-800'}`}>
-                  {navItems.find(n => n.id === activeTab)?.label}
-                </h2>
-              </div>
-              
-              <div className="flex items-center gap-4 sm:gap-6 shrink-0">
-                 {activeTab === 'orders' && (
-                   <div className="flex items-center gap-2 sm:gap-3 bg-slate-50/80 p-1.5 rounded-xl border border-slate-200">
-                     <span className={`text-[9px] sm:text-[10px] font-black tracking-widest uppercase transition-colors ${viewType === 'pre' ? 'text-indigo-600' : 'text-slate-400'}`}>未出荷</span>
-                     <button 
-                       onClick={() => setViewType(viewType === 'pre' ? 'post' : 'pre')}
-                       className={`relative inline-flex h-5 w-10 sm:h-6 sm:w-12 items-center rounded-full transition-all duration-300 focus:outline-none shadow-inner ${viewType === 'post' ? 'bg-indigo-600' : 'bg-slate-300'}`}
-                       aria-label="出荷ステータス切り替え"
-                     >
-                       <span
-                         className={`inline-block h-3.5 w-3.5 sm:h-4 sm:w-4 transform rounded-full bg-white shadow-lg transition-transform duration-300 ${viewType === 'post' ? 'translate-x-5 sm:translate-x-7' : 'translate-x-1'}`}
-                       />
-                     </button>
-                     <span className={`text-[9px] sm:text-[10px] font-black tracking-widest uppercase transition-colors ${viewType === 'post' ? 'text-indigo-600' : 'text-slate-400'}`}>出荷済</span>
-                   </div>
-                 )}
-
-                 {activeTab === 'calendar' && (
-                   <button 
-                     onClick={handleSync}
-                     disabled={isSyncing}
-                     className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold shadow-lg transition-all active:scale-95 disabled:opacity-70 ${
-                       syncDone ? 'bg-emerald-500 text-white shadow-emerald-100' : 'bg-indigo-600 text-white shadow-indigo-100 hover:bg-indigo-700'
-                     }`}
-                   >
-                     {isSyncing ? (
-                       <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                     ) : syncDone ? (
-                       <CheckCircle className="w-3.5 h-3.5" />
-                     ) : (
-                       <CalendarIcon className="w-3.5 h-3.5" />
-                     )}
-                     <span className="hidden sm:inline">{isSyncing ? '同期中...' : syncDone ? '同期完了' : 'Google同期'}</span>
-                     <span className="sm:hidden">{isSyncing ? '...' : syncDone ? '完了' : '同期'}</span>
-                   </button>
-                 )}
-
-                 <div className="hidden md:flex flex-col items-end">
-                    <div className="text-[9px] font-bold text-slate-400 uppercase tracking-widest whitespace-nowrap">System Active</div>
-                    <div className="text-xs font-bold text-emerald-500 flex items-center gap-1.5 whitespace-nowrap">
-                      <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse"></div>
-                      {new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                    </div>
-                 </div>
-              </div>
-            </header>
-
-            <div className={`flex-1 overflow-auto custom-scrollbar p-4 sm:p-8 transition-colors ${isDarkMode ? 'bg-slate-900/50' : 'bg-slate-50/50'}`}>
-              <div className="max-w-7xl mx-auto animate-in fade-in slide-in-from-right-8 duration-500 pb-12">
-                {activeTab === 'dashboard' && <Dashboard orders={orders} products={products} customers={customers} onNavigate={setActiveTab} />}
-                {activeTab === 'orders' && <OrderManager orders={orders} setOrders={setOrdersFS} customers={customers} products={products} viewType={viewType} setViewType={setViewType} onEditOrder={openOrderModal} onShipOrder={handleShipOrder} />}
-                {activeTab === 'customers' && <CustomerManager customers={customers} setCustomers={setCustomersFS} />}
-                {activeTab === 'products' && <ProductManager products={products} setProducts={setProductsFS} orders={orders} />}
-                {activeTab === 'calendar' && <OrderCalendar orders={orders} customers={customers} products={products} onEditOrder={openOrderModal} />}
-              </div>
-            </div>
-          </>
-        ) : (
-          <div className="h-full w-full bg-slate-900 flex items-center justify-center opacity-10">
+      {/* Main content */}
+      <div className="flex-1 flex flex-col md:ml-48">
+        <header className="bg-white sticky top-0 h-16 flex items-center justify-between px-4 border-b z-10">
+          <div className="flex items-center">
+             <button
+               className="md:hidden p-2 -ml-2 text-slate-600"
+               onClick={() => setIsSidebarOpen(true)}
+             >
+               <Menu className="w-6 h-6" />
+             </button>
+             <div className="flex items-center gap-2 md:gap-3 ml-2">
+                <activeNavItem.icon className="w-6 h-6 text-indigo-600 hidden sm:block" />
+                <h2 className="text-lg font-bold text-slate-800">{activeNavItem.label}</h2>
+             </div>
           </div>
-        )}
-      </main>
+          {/* Header content can be added here if needed */}
+        </header>
 
-      {/* 共通の注文編集モーダル */}
+        <main className="flex-1 overflow-y-auto p-3">
+            <div className="w-full h-full">
+                {activeTab === 'stats' && <Dashboard orders={orders} products={products} customers={customers} onNavigate={(tab) => setActiveTab(tab as TabId)} />}
+                {activeTab === 'orders' && <OrderManager orders={orders} setOrders={setOrdersFS} customers={customers} products={products} viewType={'pre'} setViewType={() => {}} onEditOrder={openOrderModal} onShipOrder={handleShipOrder} />}
+                {activeTab === 'input' && <OrderManager orders={orders} setOrders={setOrdersFS} customers={customers} products={products} viewType={'pre'} setViewType={() => {}} onEditOrder={openOrderModal} onShipOrder={handleShipOrder} />}
+                {activeTab === 'delivery' && <OrderCalendar orders={orders} customers={customers} products={products} onEditOrder={openOrderModal} />}
+                {activeTab === 'master' && 
+                    <div className="space-y-6">
+                        <CustomerManager customers={customers} setCustomers={setCustomersFS} />
+                        <ProductManager products={products} setProducts={setProductsFS} orders={orders} />
+                    </div>
+                }
+            </div>
+        </main>
+      </div>
+      
+      {/* Shared Edit Modal */}
       {isOrderModalOpen && (
-        <OrderEditModal 
+        <OrderEditModal
           isOpen={isOrderModalOpen}
           onClose={() => setIsOrderModalOpen(false)}
           editingOrder={selectedOrder}
@@ -514,113 +416,6 @@ const App: React.FC = () => {
           onSave={handleSaveOrder}
           onDelete={handleDeleteOrder}
         />
-      )}
-
-      {isSettingsOpen && (
-        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-md flex items-center justify-center z-[100] p-4">
-          <div className={`rounded-[32px] w-full max-w-lg shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 border ${isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-100'}`}>
-            <div className={`p-6 border-b flex justify-between items-center ${isDarkMode ? 'border-slate-700' : 'border-slate-100'}`}>
-              <div className="flex items-center gap-3">
-                <div className="p-2.5 bg-indigo-600 rounded-2xl text-white shadow-lg shadow-indigo-100">
-                  <Settings className="w-6 h-6" />
-                </div>
-                <h3 className={`text-xl font-black tracking-tight ${isDarkMode ? 'text-white' : 'text-slate-800'}`}>システム設定</h3>
-              </div>
-              <button onClick={() => setIsSettingsOpen(false)} className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-slate-100 text-slate-400 transition-colors"><X className="w-6 h-6" /></button>
-            </div>
-            
-            <div className="p-8 space-y-10 overflow-y-auto max-h-[75vh] custom-scrollbar">
-              {/* 外観設定 */}
-              <div className="space-y-4">
-                <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">外観設定</h4>
-                <div className={`flex items-center justify-between p-5 rounded-2xl border ${isDarkMode ? 'bg-slate-900 border-slate-700' : 'bg-slate-50 border-slate-100'}`}>
-                  <div className="flex items-center gap-4">
-                    <div className={`p-3 rounded-xl ${isDarkMode ? 'bg-indigo-500/10 text-indigo-400' : 'bg-white text-indigo-600 shadow-sm'}`}>
-                      {isDarkMode ? <Moon className="w-6 h-6" /> : <Sun className="w-6 h-6" />}
-                    </div>
-                    <div>
-                      <div className={`text-sm font-bold ${isDarkMode ? 'text-white' : 'text-slate-800'}`}>ダークモード</div>
-                      <div className="text-[10px] text-slate-500 font-medium leading-relaxed">画面全体の配色を切り替えます</div>
-                    </div>
-                  </div>
-                  <button 
-                    onClick={() => setIsDarkMode(!isDarkMode)}
-                    className={`w-14 h-7 rounded-full relative transition-all duration-300 ${isDarkMode ? 'bg-indigo-600' : 'bg-slate-300'}`}
-                  >
-                    <div className={`absolute top-1 w-5 h-5 rounded-full bg-white transition-all shadow-md ${isDarkMode ? 'left-8' : 'left-1'}`}></div>
-                  </button>
-                </div>
-              </div>
-
-              {/* Googleカレンダー設定 */}
-              <div className="space-y-4">
-                <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Googleカレンダー連携</h4>
-                <div className={`p-5 rounded-2xl border space-y-5 ${isDarkMode ? 'bg-slate-900 border-slate-700' : 'bg-slate-50 border-slate-100'}`}>
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-4">
-                      <div className={`p-3 rounded-xl ${isDarkMode ? 'bg-rose-500/10 text-rose-400' : 'bg-white text-rose-500 shadow-sm'}`}>
-                        <CalendarIcon className="w-6 h-6" />
-                      </div>
-                      <div>
-                        <div className={`text-sm font-bold ${isDarkMode ? 'text-white' : 'text-slate-800'}`}>連携ステータス</div>
-                        <div className="text-[10px] text-slate-500 font-medium leading-relaxed">出荷予定の自動同期設定</div>
-                      </div>
-                    </div>
-                    <button 
-                      onClick={() => setIsGoogleLinked(!isGoogleLinked)}
-                      className={`w-14 h-7 rounded-full relative transition-all duration-300 ${isGoogleLinked ? 'bg-emerald-500' : 'bg-slate-300'}`}
-                    >
-                      <div className={`absolute top-1 w-5 h-5 rounded-full bg-white transition-all shadow-md ${isGoogleLinked ? 'left-8' : 'left-1'}`}></div>
-                    </button>
-                  </div>
-
-                  {isGoogleLinked && (
-                    <div className="space-y-6 animate-in fade-in slide-in-from-top-2 duration-300">
-                      <div className="space-y-2">
-                        <label className={`text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5 ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>
-                          <Mail className="w-3 h-3" /> 連携中のアカウント
-                        </label>
-                        <input 
-                          type="email"
-                          value={googleAccount}
-                          onChange={(e) => setGoogleAccount(e.target.value)}
-                          className={`w-full px-4 py-3 rounded-xl text-sm font-bold outline-none border transition-all ${isDarkMode ? 'bg-slate-800 border-slate-700 focus:border-indigo-500 text-white' : 'bg-white border-slate-200 focus:border-indigo-500 text-slate-800'}`}
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <label className={`text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5 ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>
-                          <Hash className="w-3 h-3" /> カレンダーID
-                        </label>
-                        <input 
-                          type="text"
-                          value={googleCalendarId}
-                          onChange={(e) => setGoogleCalendarId(e.target.value)}
-                          placeholder="出荷用"
-                          className={`w-full px-4 py-3 rounded-xl text-sm font-bold outline-none border transition-all ${isDarkMode ? 'bg-slate-800 border-slate-700 focus:border-indigo-500 text-white' : 'bg-white border-slate-200 focus:border-indigo-500 text-slate-800'}`}
-                        />
-                        <p className="text-[9px] text-slate-400 font-bold px-1 italic">特定のカレンダーに同期したい場合はIDを入力してください</p>
-                      </div>
-                      <button className="w-full py-3 bg-indigo-50 text-indigo-600 rounded-xl text-xs font-black border border-indigo-100 hover:bg-indigo-100 transition-all flex items-center justify-center gap-2">
-                        <Globe className="w-4 h-4" />
-                        アカウント認証を再実行
-                      </button>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* その他 */}
-              <div className="pt-6">
-                <button 
-                  onClick={() => setIsSettingsOpen(false)}
-                  className={`w-full py-4 rounded-2xl font-black text-sm transition-all shadow-lg active:scale-95 ${isDarkMode ? 'bg-slate-700 text-slate-200 hover:bg-slate-600 shadow-slate-900/40' : 'bg-slate-900 text-white hover:bg-slate-800 shadow-slate-200'}`}
-                >
-                  設定を保存して閉じる
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
       )}
     </div>
   );

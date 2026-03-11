@@ -1,4 +1,3 @@
-
 import React, { useMemo } from 'react';
 import { Order, Product, Customer } from '../types';
 import { 
@@ -19,7 +18,7 @@ interface Props {
   orders: Order[];
   products: Product[];
   customers: Customer[];
-  onNavigate: (tab: 'dashboard' | 'orders' | 'customers' | 'products' | 'calendar' | 'insights') => void;
+  onNavigate: (tab: 'orders' | 'input' | 'delivery' | 'master' | 'stats') => void;
 }
 
 const Dashboard: React.FC<Props> = ({ orders, products, customers, onNavigate }) => {
@@ -69,8 +68,8 @@ const Dashboard: React.FC<Props> = ({ orders, products, customers, onNavigate })
   const statItems = [
     { label: '総売上金額', value: `¥${stats.totalSales.toLocaleString()}`, icon: DollarSign, color: 'text-emerald-600', bg: 'bg-emerald-50', target: 'orders' as const },
     { label: '未出荷の案件', value: stats.activeOrders, icon: ShoppingBag, color: 'text-indigo-600', bg: 'bg-indigo-50', target: 'orders' as const },
-    { label: '取引先数', value: stats.customerCount, icon: Users, color: 'text-amber-600', bg: 'bg-amber-50', target: 'customers' as const },
-    { label: 'アイテム数', value: stats.productCount, icon: TrendingUp, color: 'text-violet-600', bg: 'bg-violet-50', target: 'products' as const },
+    { label: '取引先数', value: stats.customerCount, icon: Users, color: 'text-amber-600', bg: 'bg-amber-50', target: 'master' as const },
+    { label: 'アイテム数', value: stats.productCount, icon: TrendingUp, color: 'text-violet-600', bg: 'bg-violet-50', target: 'master' as const },
   ];
 
   return (
@@ -97,7 +96,7 @@ const Dashboard: React.FC<Props> = ({ orders, products, customers, onNavigate })
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         <div className="bg-white p-8 rounded-2xl border border-slate-200 shadow-sm">
           <h3 className="text-lg font-bold text-slate-800 mb-8">商品別 売上高トップ8</h3>
-          <div className="h-[360px]">
+          <div style={{ width: '100%', height: 360 }}>
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={productAggregation}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
@@ -116,7 +115,7 @@ const Dashboard: React.FC<Props> = ({ orders, products, customers, onNavigate })
 
         <div className="bg-white p-8 rounded-2xl border border-slate-200 shadow-sm">
           <h3 className="text-lg font-bold text-slate-800 mb-8">商品別 出荷数量比率 (Top 5)</h3>
-          <div className="h-[360px]">
+          <div style={{ width: '100%', height: 360 }}>
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
                 <Pie
