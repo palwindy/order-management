@@ -21,6 +21,7 @@ const OrderEditModal: React.FC<Props> = ({ isOpen, onClose, editingOrder, custom
   );
   
   const [status, setStatus] = useState<OrderStatus>(editingOrder?.status || 'Pending');
+  const [notes, setNotes] = useState<string>(editingOrder?.notes || '');
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
   const [errors, setErrors] = useState<string[]>([]);
 
@@ -103,6 +104,7 @@ const OrderEditModal: React.FC<Props> = ({ isOpen, onClose, editingOrder, custom
       shippingDate: shippingDate,
       deliveryDate: deliveryDate,
       status: status,
+      notes: notes.trim() || undefined,
     };
 
     onSave(newOrder);
@@ -248,6 +250,16 @@ const OrderEditModal: React.FC<Props> = ({ isOpen, onClose, editingOrder, custom
                   出荷済
                 </button>
               </div>
+            </div>
+            <div>
+              <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-3">備考</label>
+              <textarea
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                rows={3}
+                placeholder="備考があれば入力してください"
+                className="w-full px-4 sm:px-5 py-3 sm:py-4 bg-slate-50 border border-slate-100 rounded-2xl text-sm font-bold focus:ring-4 focus:ring-indigo-500/10 outline-none transition-all hover:bg-slate-100 text-slate-900 resize-none"
+              />
             </div>
           </div>
           

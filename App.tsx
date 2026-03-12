@@ -25,7 +25,7 @@ import * as XLSX from 'xlsx-js-style';
 import { db } from './firebase';
 import { collection, doc, setDoc, deleteDoc, getDocs, writeBatch } from 'firebase/firestore';
 
-const APP_VERSION = "Ver.1.44";
+const APP_VERSION = "Ver.1.45";
 const COMPANY_NAME = "注文管理システム";
 
 // Firestoreへの差分同期ヘルパー
@@ -315,33 +315,9 @@ const App: React.FC = () => {
             { wch: 12 }, { wch: 20 }, { wch: 14 }, { wch: 10 }, { wch: 30 },
             { wch: 14 }, { wch: 14 }, { wch: 24 }, { wch: 30 },
         ];
-        XLSX.utils.book_append_sheet(wb, wsCustomers, '顧客管理');
+        XLSX.utils.book_append_sheet(wb, wsCustomers, '顧客マスタ');
         
-        const productHeaders = ['商品ID', '商品名', '在庫数'];
-        const productRows: any[][] = [productHeaders];
-        products.forEach(p => {
-            productRows.push([p.id, p.name, p.stock]);
-        });
-        const wsProducts = XLSX.utils.aoa_to_sheet(productRows);
-        const productRange = XLSX.utils.decode_range(wsProducts['!ref']!);
-        for (let R = productRange.s.r; R <= productRange.e.r; R++) {
-            for (let C = productRange.s.c; C <= productRange.e.c; C++) {
-                const cellAddr = XLSX.utils.encode_cell({ r: R, c: C });
-                if (!wsProducts[cellAddr]) wsProducts[cellAddr] = { v: '', t: 's' };
-                wsProducts[cellAddr].s = {
-                    border: {
-                        top:    { style: 'thin', color: { rgb: '000000' } },
-                        bottom: { style: 'thin', color: { rgb: '000000' } },
-                        left:   { style: 'thin', color: { rgb: '000000' } },
-                        right:  { style: 'thin', color: { rgb: '000000' } },
-                    },
-                    font: R === 0 ? { bold: true } : undefined,
-                    fill: R === 0 ? { fgColor: { rgb: 'E8EAF6' } } : undefined,
-                };
-            }
-        }
-        wsProducts['!cols'] = [{ wch: 12 }, { wch: 24 }, { wch: 10 }];
-        XLSX.utils.book_append_sheet(wb, wsProducts, '商品管理');
+        XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(products), '商品マスタ');
 
         XLSX.writeFile(wb, fileName);
         alert("Excelファイルを出力しました。");
@@ -411,7 +387,7 @@ const App: React.FC = () => {
             }
 
             // --- 顧客マスタシート ---
-            const customerSheet = workbook.Sheets['顧客管理'];
+            const customerSheet = workbook.Sheets['顧客マスタ'];
             if (customerSheet) {
                 const customerRowData: any[][] = XLSX.utils.sheet_to_json(customerSheet, { header: 1 });
                 const customerDataRows = customerRowData.slice(1);
@@ -432,16 +408,9 @@ const App: React.FC = () => {
             }
 
             // --- 商品マスタシート ---
-            const productSheet = workbook.Sheets['商品管理'];
+            const productSheet = workbook.Sheets['商品マスタ'];
             if (productSheet) {
-                const productRowData: any[][] = XLSX.utils.sheet_to_json(productSheet, { header: 1 });
-                const newProducts: Product[] = productRowData.slice(1)
-                    .filter(row => row[0])
-                    .map(row => ({
-                        id:    String(row[0] ?? ''),
-                        name:  String(row[1] ?? ''),
-                        stock: Number(row[2]) || 0,
-                    }));
+                const newProducts: Product[] = XLSX.utils.sheet_to_json(productSheet);
                 setProductsFS(newProducts);
             }
 

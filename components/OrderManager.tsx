@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo } from 'react';
 import { Order, Customer, Product, OrderStatus } from '../types';
 import { Plus, Search, Truck } from 'lucide-react';
@@ -58,7 +57,8 @@ const OrderManager: React.FC<Props> = ({ orders, setOrders, customers, products,
         </button>
       </div>
 
-      <div className={`rounded-3xl border shadow-sm overflow-hidden transition-all duration-700 ${viewType === 'post' ? 'bg-slate-100/70 border-slate-300' : 'bg-white border-slate-200'}`}>
+      {/* --- テーブル（PC用） --- */}
+      <div className="hidden md:block rounded-3xl border shadow-sm overflow-hidden transition-all duration-700 bg-white border-slate-200">
         <div className="overflow-x-auto custom-scrollbar">
           <table className="w-full text-sm text-left border-collapse">
             <thead>
@@ -113,6 +113,11 @@ const OrderManager: React.FC<Props> = ({ orders, setOrders, customers, products,
                           {order.items.length > 1 && (
                             <span className="text-[10px] font-black text-slate-400">他 {order.items.length - 1} 点</span>
                           )}
+                          {order.notes && (
+                            <span className="text-[10px] font-black text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded">
+                              備考あり
+                            </span>
+                          )}
                         </div>
                       </td>
                       <td className="px-6 py-5 text-center">
@@ -141,6 +146,86 @@ const OrderManager: React.FC<Props> = ({ orders, setOrders, customers, products,
             </tbody>
           </table>
         </div>
+      </div>
+
+      {/* --- カードリスト（スマホ用） --- */}
+      <div className="md:hidden space-y-3">
+        {filteredOrders.length === 0 ? (
+          <div className="text-center text-slate-400 font-bold italic py-16">
+            該当する注文はありません
+          </div>
+        ) : (
+          filteredOrders.map(order => {
+            const customer = customers.find(c => c.id === order.customerId);
+            const firstItem = order.items[0];
+            const firstProduct = products.find(p => p.id === firstItem?.productId);
+            const isTodayShipment = order.shippingDate === todayStr && order.status === 'Pending';
+
+            return (
+              <div
+                key={order.id}
+                onClick={() => onEditOrder(order)}
+                className={`bg-white rounded-2xl border shadow-sm p-4 cursor-pointer border-l-4 transition-all active:scale-[0.98] ${
+                  isTodayShipment
+                    ? 'bg-rose-50/60 border-l-rose-500'
+                    : 'border-l-transparent'
+                }`}
+              >
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-3">
+                    <div className={`text-xs font-black flex items-center gap-1 ${isTodayShipment ? 'text-rose-600' : 'text-slate-700'}`}>
+                      <Truck className={`w-3.5 h-3.5 ${isTodayShipment ? 'text-rose-500 animate-pulse' : 'text-indigo-400'}`} />
+                      {order.shippingDate}
+                      {isTodayShipment && (
+                        <span className="text-[9px] bg-rose-600 text-white px-1.5 rounded-full ml-1">本日</span>
+                      )}
+                    </div>
+                    <div className="text-xs font-bold text-slate-400 flex items-center gap-1">
+                      <div className="w-1.5 h-1.5 bg-slate-300 rounded-full" />
+                      {order.deliveryDate}
+                    </div>
+                  </div>
+                  {order.status === 'Pending' ? (
+                    <button
+                      onClick={(e) => handleMarkAsShipped(e, order.id)}
+                      className={`w-9 h-9 flex items-center justify-center rounded-full transition-all shadow-sm active:scale-90 ${
+                        isTodayShipment
+                          ? 'bg-rose-100 text-rose-600 hover:bg-rose-600 hover:text-white'
+                          : 'bg-emerald-50 text-emerald-600 hover:bg-emerald-600 hover:text-white'
+                      }`}
+                    >
+                      <Truck className="w-4 h-4" />
+                    </button>
+                  ) : (
+                    <div className="w-9 h-9 flex items-center justify-center bg-emerald-500 text-white rounded-full shadow-md">
+                      <Truck className="w-4 h-4" />
+                    </div>
+                  )}
+                </div>
+
+                <div className="mb-1">
+                  <div className="font-black text-slate-900 leading-tight">{customer?.company}</div>
+                  <div className="text-[11px] font-bold text-slate-400">{customer?.name} 様</div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-bold text-slate-800">{firstProduct?.name || '商品なし'}</span>
+                  <span className={`text-[10px] font-black px-1.5 py-0.5 rounded ${isTodayShipment ? 'text-rose-600 bg-rose-100' : 'text-indigo-500 bg-indigo-50'}`}>
+                    x {firstItem?.quantity}
+                  </span>
+                  {order.items.length > 1 && (
+                    <span className="text-[10px] font-black text-slate-400">他 {order.items.length - 1} 点</span>
+                  )}
+                  {order.notes && (
+                    <span className="text-[10px] font-black text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded">
+                      備考あり
+                    </span>
+                  )}
+                </div>
+              </div>
+            );
+          })
+        )}
       </div>
     </div>
   );
