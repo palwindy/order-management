@@ -12,6 +12,7 @@ import {
   LogOut,
   Loader2,
   FileSpreadsheet,
+  AlertTriangle,
 } from 'lucide-react';
 import { Customer, Product, Order } from './types';
 import { INITIAL_CUSTOMERS, INITIAL_PRODUCTS, INITIAL_ORDERS } from './constants';
@@ -25,7 +26,7 @@ import * as XLSX from 'xlsx-js-style';
 import { db } from './firebase';
 import { collection, doc, setDoc, deleteDoc, getDocs, writeBatch } from 'firebase/firestore';
 
-const APP_VERSION = "Ver.1.45";
+const APP_VERSION = "Ver.1.49";
 const COMPANY_NAME = "注文管理システム";
 
 // Firestoreへの差分同期ヘルパー
@@ -65,6 +66,7 @@ const App: React.FC = () => {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
+  const [showShipped, setShowShipped] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -142,11 +144,41 @@ const App: React.FC = () => {
   };
   
   const handleSaveOrder = async (newOrder: Order) => {
-    if (selectedOrder) {
-      setOrdersFS(prev => prev.map(o => o.id === selectedOrder.id ? newOrder : o));
+    const prevOrder = orders.find(o => o.id === newOrder.id);
+
+    // 出荷済 → 未出荷 に戻す場合：在庫を元に戻す
+    if (prevOrder?.status === 'Shipped' && newOrder.status === 'Pending') {
+      const batch = writeBatch(db);
+      batch.set(doc(db, 'orders', newOrder.id), newOrder);
+
+      const updatedProducts = [...products];
+      for (const item of prevOrder.items) {
+        const idx = updatedProducts.findIndex(p => p.id === item.productId);
+        if (idx !== -1) {
+          const restoredStock = updatedProducts[idx].stock + item.quantity;
+          updatedProducts[idx] = { ...updatedProducts[idx], stock: restoredStock };
+          batch.update(doc(db, 'products', item.productId), { stock: restoredStock });
+        }
+      }
+      await batch.commit();
+      setOrders(prev => prev.map(o => o.id === newOrder.id ? newOrder : o));
+      setProducts(updatedProducts);
+
+    // 未出荷 → 出荷済 に変更して保存する場合：在庫を減らす
+    } else if (prevOrder?.status === 'Pending' && newOrder.status === 'Shipped') {
+      await handleShipOrder(newOrder.id);
+      // handleShipOrder 内で保存済みのため、追加の setOrders は不要
+
+    // ステータス変更なし（通常の編集保存）
     } else {
+      setOrdersFS(prev => prev.map(o => o.id === newOrder.id ? newOrder : o));
+    }
+
+    // 新規登録の場合
+    if (!prevOrder) {
       setOrdersFS(prev => [newOrder, ...prev]);
     }
+
     setIsOrderModalOpen(false);
   };
   
@@ -509,12 +541,33 @@ const App: React.FC = () => {
                 <h2 className="text-lg font-bold text-slate-800">{activeNavItem.label}</h2>
              </div>
           </div>
+          {activeTab === 'orders' && (
+            <div className="flex items-center gap-2">
+              <span className={`text-xs font-black transition-colors ${!showShipped ? 'text-indigo-600' : 'text-slate-400'}`}>
+                未出荷
+              </span>
+              <button
+                type="button"
+                onClick={() => setShowShipped(prev => !prev)}
+                className={`relative w-12 h-6 rounded-full transition-colors duration-300 focus:outline-none ${
+                  showShipped ? 'bg-indigo-600' : 'bg-slate-200'
+                }`}
+              >
+                <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform duration-300 ${
+                  showShipped ? 'translate-x-6' : 'translate-x-0'
+                }`} />
+              </button>
+              <span className={`text-xs font-black transition-colors ${showShipped ? 'text-indigo-600' : 'text-slate-400'}`}>
+                出荷済
+              </span>
+            </div>
+          )}
         </header>
 
         <main className="flex-1 overflow-y-auto p-3">
             <div className="w-full h-full">
                 {activeTab === 'stats' && <Dashboard orders={orders} products={products} customers={customers} onNavigate={(tab) => setActiveTab(tab as TabId)} />}
-                {activeTab === 'orders' && <OrderManager orders={orders} setOrders={setOrdersFS} customers={customers} products={products} viewType={'pre'} setViewType={() => {}} onEditOrder={openOrderModal} onShipOrder={handleShipOrder} />}
+                {activeTab === 'orders' && <OrderManager orders={orders} setOrders={setOrdersFS} customers={customers} products={products} showShipped={showShipped} viewType={'pre'} setViewType={() => {}} onEditOrder={openOrderModal} onShipOrder={handleShipOrder} />}
                 {activeTab === 'calendar' && <OrderCalendar orders={orders} customers={customers} products={products} onEditOrder={openOrderModal} />}
                 {activeTab === 'products'  && <ProductManager products={products} setProducts={setProductsFS} orders={orders} />}
                 {activeTab === 'customers' && <CustomerManager customers={customers} setCustomers={setCustomersFS} />}

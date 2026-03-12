@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Order, Customer, Product, OrderStatus, OrderItem } from '../types';
 import { X, Info, Trash2, AlertTriangle, MinusCircle, CheckCircle2 } from 'lucide-react';
 
@@ -24,6 +24,23 @@ const OrderEditModal: React.FC<Props> = ({ isOpen, onClose, editingOrder, custom
   const [notes, setNotes] = useState<string>(editingOrder?.notes || '');
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
   const [errors, setErrors] = useState<string[]>([]);
+  const [focusedCell, setFocusedCell] = useState<string | null>(null);
+
+  const todayStr = new Date().toISOString().split('T')[0];
+  const [shippingDateVal, setShippingDateVal] = useState<string>(
+    editingOrder?.shippingDate || todayStr
+  );
+  const [deliveryDateVal, setDeliveryDateVal] = useState<string>(
+    editingOrder?.deliveryDate || todayStr
+  );
+
+  const totalAmount = useMemo(() => {
+    return tempItems.reduce((sum, item) => {
+      const price = parseFloat(item.unitPrice) || 0;
+      const qty = parseInt(item.quantity) || 0;
+      return sum + (price * qty);
+    }, 0);
+  }, [tempItems]);
 
   if (!isOpen) return null;
 
@@ -77,16 +94,14 @@ const OrderEditModal: React.FC<Props> = ({ isOpen, onClose, editingOrder, custom
     const formData = new FormData(e.currentTarget);
     const customerId = editingOrder?.customerId || formData.get('customerId') as string;
     const orderDate = editingOrder?.orderDate || new Date().toISOString().split('T')[0];
-    const shippingDate = formData.get('shippingDate') as string;
-    const deliveryDate = formData.get('deliveryDate') as string;
+    const shippingDate = shippingDateVal;
+    const deliveryDate = deliveryDateVal;
 
     const processedItems: OrderItem[] = tempItems.map(item => ({
       productId: item.productId,
       quantity: Number(item.quantity),
       unitPrice: item.unitPrice === '' ? 0 : Number(item.unitPrice)
     }));
-
-    const totalAmount = processedItems.reduce((sum, item) => sum + (item.unitPrice * item.quantity), 0);
 
     // OrderID 生成ロジック: 顧客ID + 注文日(YYYYMMDD) + 重複しない何か(4文字)
     const generateNewOrderId = () => {
@@ -111,6 +126,9 @@ const OrderEditModal: React.FC<Props> = ({ isOpen, onClose, editingOrder, custom
   };
 
   const selectedCustomer = customers.find(c => c.id === (editingOrder?.customerId || ''));
+
+  const isDateInvalid =
+    status === 'Pending' && (shippingDateVal < todayStr || deliveryDateVal < todayStr);
 
   return (
     <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-[100] p-4 overflow-y-auto">
@@ -176,25 +194,35 @@ const OrderEditModal: React.FC<Props> = ({ isOpen, onClose, editingOrder, custom
                         {products.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                       </select>
                     </div>
-                    <div className="w-16 sm:w-24">
-                      <label className="block text-[8px] sm:text-[9px] font-black text-slate-400 mb-1.5 uppercase tracking-wider">単価</label>
-                      <input 
-                        type="number" 
-                        value={item.unitPrice} 
-                        onChange={(e) => updateItem(idx, 'unitPrice', e.target.value)}
-                        onKeyDown={handleKeyDown}
-                        className="w-full px-2 py-2 sm:py-2.5 bg-white border border-slate-200 rounded-xl text-xs sm:text-sm font-bold outline-none text-slate-900" 
-                        placeholder="0"
-                      />
-                    </div>
                     <div className="w-12 sm:w-16">
                       <label className="block text-[8px] sm:text-[9px] font-black text-slate-400 mb-1.5 uppercase tracking-wider">数量</label>
                       <input 
-                        type="number" 
-                        value={item.quantity} 
-                        onChange={(e) => updateItem(idx, 'quantity', e.target.value)}
+                        type="text" 
+                        value={focusedCell === `${idx}-quantity` ? item.quantity : (item.quantity === '' ? '' : Number(item.quantity).toLocaleString())}
+                        onFocus={() => setFocusedCell(`${idx}-quantity`)}
+                        onBlur={(e) => {
+                          setFocusedCell(null);
+                          updateItem(idx, 'quantity', e.target.value.replace(/,/g, ''));
+                        }}
+                        onChange={(e) => updateItem(idx, 'quantity', e.target.value.replace(/,/g, ''))}
                         onKeyDown={handleKeyDown}
                         className={`w-full px-2 py-2 sm:py-2.5 bg-white border rounded-xl text-xs sm:text-sm font-bold outline-none transition-colors text-slate-900 ${errors.some(e => e.includes(`${idx + 1}行目の数量`)) ? 'border-red-300' : 'border-slate-200'}`} 
+                        placeholder="0"
+                      />
+                    </div>
+                    <div className="w-16 sm:w-24">
+                      <label className="block text-[8px] sm:text-[9px] font-black text-slate-400 mb-1.5 uppercase tracking-wider">単価</label>
+                      <input 
+                        type="text" 
+                        value={focusedCell === `${idx}-unitPrice` ? item.unitPrice : (item.unitPrice === '' ? '' : `¥${Number(item.unitPrice).toLocaleString()}`)}
+                        onFocus={() => setFocusedCell(`${idx}-unitPrice`)}
+                        onBlur={(e) => {
+                          setFocusedCell(null);
+                          updateItem(idx, 'unitPrice', e.target.value.replace(/[¥,]/g, ''));
+                        }}
+                        onChange={(e) => updateItem(idx, 'unitPrice', e.target.value.replace(/[¥,]/g, ''))}
+                        onKeyDown={handleKeyDown}
+                        className="w-full px-2 py-2 sm:py-2.5 bg-white border border-slate-200 rounded-xl text-xs sm:text-sm font-bold outline-none text-slate-900" 
                         placeholder="0"
                       />
                     </div>
@@ -204,6 +232,7 @@ const OrderEditModal: React.FC<Props> = ({ isOpen, onClose, editingOrder, custom
                   </div>
                 ))}
               </div>
+              <div className="text-right font-bold text-sm text-slate-600 pr-4">合計金額: <span className="text-lg text-indigo-700 font-black">¥{totalAmount.toLocaleString()}</span></div>
             </div>
 
             <div className="grid grid-cols-2 gap-4 sm:gap-6">
@@ -213,7 +242,8 @@ const OrderEditModal: React.FC<Props> = ({ isOpen, onClose, editingOrder, custom
                   name="shippingDate" 
                   type="date" 
                   onKeyDown={handleKeyDown}
-                  defaultValue={editingOrder?.shippingDate || new Date().toISOString().split('T')[0]} 
+                  value={shippingDateVal}
+                  onChange={(e) => setShippingDateVal(e.target.value)}
                   required 
                   className="w-full px-4 sm:px-5 py-3 sm:py-4 bg-slate-50 border border-slate-100 rounded-2xl text-sm sm:text-base font-bold focus:ring-4 focus:ring-indigo-500/10 outline-none transition-all hover:bg-slate-100 text-slate-900" 
                 />
@@ -224,7 +254,8 @@ const OrderEditModal: React.FC<Props> = ({ isOpen, onClose, editingOrder, custom
                   name="deliveryDate" 
                   type="date" 
                   onKeyDown={handleKeyDown}
-                  defaultValue={editingOrder?.deliveryDate || new Date().toISOString().split('T')[0]} 
+                  value={deliveryDateVal}
+                  onChange={(e) => setDeliveryDateVal(e.target.value)}
                   required 
                   className="w-full px-4 sm:px-5 py-3 sm:py-4 bg-slate-50 border border-slate-100 rounded-2xl text-sm sm:text-base font-bold focus:ring-4 focus:ring-indigo-500/10 outline-none transition-all hover:bg-slate-100 text-slate-900" 
                 />
@@ -264,6 +295,12 @@ const OrderEditModal: React.FC<Props> = ({ isOpen, onClose, editingOrder, custom
           </div>
           
           <div className="pt-4 space-y-6">
+            {isDateInvalid && (
+              <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 text-amber-700 text-xs font-bold flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+                出荷日・納品日は本日以降の日付を指定してください。
+              </div>
+            )}
             {errors.length > 0 && (
               <div className="bg-red-50 border border-red-100 rounded-2xl p-4 sm:p-5 animate-in fade-in slide-in-from-top-2 duration-300">
                 <div className="flex items-center gap-2 text-red-600 font-black text-xs sm:text-sm mb-3">
@@ -279,7 +316,8 @@ const OrderEditModal: React.FC<Props> = ({ isOpen, onClose, editingOrder, custom
               <button type="button" onClick={onClose} className="flex-1 px-4 sm:px-8 py-4 sm:py-5 border-2 border-slate-100 rounded-[20px] sm:rounded-[24px] text-sm sm:text-base font-black text-slate-500 hover:bg-slate-50 transition-all">キャンセル</button>
               <button 
                 type="submit" 
-                className="flex-1 px-4 sm:px-8 py-4 sm:py-5 rounded-[20px] sm:rounded-[24px] text-sm sm:text-base font-black shadow-xl transition-all active:scale-95 bg-indigo-600 text-white shadow-indigo-200 hover:bg-indigo-700"
+                disabled={isDateInvalid}
+                className={`flex-1 px-4 sm:px-8 py-4 sm:py-5 rounded-[20px] sm:rounded-[24px] text-sm sm:text-base font-black shadow-xl transition-all bg-indigo-600 text-white shadow-indigo-200 ${isDateInvalid ? 'opacity-40 cursor-not-allowed' : 'hover:bg-indigo-700 active:scale-95'}`}
               >
                 保存する
               </button>

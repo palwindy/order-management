@@ -11,28 +11,32 @@ interface Props {
   setViewType: React.Dispatch<React.SetStateAction<'pre' | 'post'>>;
   onEditOrder: (order: Order | null) => void;
   onShipOrder: (orderId: string) => void;
+  showShipped: boolean;
 }
 
-const OrderManager: React.FC<Props> = ({ orders, setOrders, customers, products, viewType, onEditOrder, onShipOrder }) => {
+const OrderManager: React.FC<Props> = ({ orders, setOrders, customers, products, viewType, setViewType, onEditOrder, onShipOrder, showShipped }) => {
   const [searchTerm, setSearchTerm] = useState('');
+  const [confirmShipId, setConfirmShipId] = useState<string | null>(null);
   const todayStr = useMemo(() => new Date().toISOString().split('T')[0], []);
 
   const filteredOrders = useMemo(() => {
     return orders
       .filter(o => {
-        if (viewType === 'pre' && o.status === 'Shipped') return false;
-        if (viewType === 'post' && o.status === 'Pending') return false;
+        if (!showShipped && o.status === 'Shipped') return false;
+        if (showShipped && o.status === 'Pending') return false;
         
         const cust = customers.find(c => c.id === o.customerId);
         const searchStr = `${cust?.name} ${cust?.company}`.toLowerCase();
         return searchStr.includes(searchTerm.toLowerCase());
       })
       .sort((a, b) => new Date(a.shippingDate).getTime() - new Date(b.shippingDate).getTime());
-  }, [orders, viewType, searchTerm, customers]);
+  }, [orders, showShipped, searchTerm, customers]);
 
-  const handleMarkAsShipped = (e: React.MouseEvent, id: string) => {
-    e.stopPropagation();
-    onShipOrder(id);
+  const handleConfirmShip = () => {
+    if (confirmShipId) {
+      onShipOrder(confirmShipId);
+      setConfirmShipId(null);
+    }
   };
 
   return (
@@ -62,7 +66,7 @@ const OrderManager: React.FC<Props> = ({ orders, setOrders, customers, products,
         <div className="overflow-x-auto custom-scrollbar">
           <table className="w-full text-sm text-left border-collapse">
             <thead>
-              <tr className={`font-bold uppercase text-[10px] tracking-widest border-b border-slate-100 ${viewType === 'post' ? 'bg-slate-200/50 text-slate-600' : 'bg-slate-50/80 text-slate-500'}`}>
+              <tr className={`font-bold uppercase text-[10px] tracking-widest border-b border-slate-100 ${showShipped ? 'bg-slate-200/50 text-slate-600' : 'bg-slate-50/80 text-slate-500'}`}>
                 <th className="px-6 py-5 whitespace-nowrap w-[130px]">出荷日</th>
                 <th className="px-6 py-5 whitespace-nowrap w-[130px]">納品日</th>
                 <th className="px-6 py-5 whitespace-nowrap">顧客・会社名</th>
@@ -89,7 +93,7 @@ const OrderManager: React.FC<Props> = ({ orders, setOrders, customers, products,
                       className={`transition-all group cursor-pointer border-l-4 ${
                         isTodayShipment 
                           ? 'bg-rose-50/60 border-l-rose-500 hover:bg-rose-100/80' 
-                          : `border-l-transparent hover:border-l-indigo-400 ${viewType === 'post' ? 'hover:bg-slate-200/50' : 'hover:bg-indigo-50/40'}`
+                          : `border-l-transparent hover:border-l-indigo-400 ${showShipped ? 'hover:bg-slate-200/50' : 'hover:bg-indigo-50/40'}`
                       }`}
                     >
                       <td className="px-6 py-5">
@@ -109,7 +113,7 @@ const OrderManager: React.FC<Props> = ({ orders, setOrders, customers, products,
                       <td className="px-6 py-5">
                         <div className="font-bold text-slate-800">{firstProduct?.name || '商品なし'}</div>
                         <div className="flex items-center gap-2 mt-1">
-                          <span className={`text-[10px] font-black px-1.5 py-0.5 rounded ${isTodayShipment ? 'text-rose-600 bg-rose-100' : 'text-indigo-500 bg-indigo-50'}`}>x {firstItem?.quantity}</span>
+                          <span className={`text-[10px] font-black px-1.5 py-0.5 rounded ${isTodayShipment ? 'text-rose-600 bg-rose-100' : 'text-indigo-500 bg-indigo-50'}`}>x {(firstItem?.quantity ?? 0).toLocaleString()}</span>
                           {order.items.length > 1 && (
                             <span className="text-[10px] font-black text-slate-400">他 {order.items.length - 1} 点</span>
                           )}
@@ -123,7 +127,7 @@ const OrderManager: React.FC<Props> = ({ orders, setOrders, customers, products,
                       <td className="px-6 py-5 text-center">
                         {order.status === 'Pending' ? (
                           <button 
-                            onClick={(e) => handleMarkAsShipped(e, order.id)} 
+                            onClick={(e) => { e.stopPropagation(); setConfirmShipId(order.id); }}
                             className={`mx-auto w-10 h-10 flex items-center justify-center rounded-full transition-all shadow-sm active:scale-90 group/btn ${
                               isTodayShipment 
                                 ? 'bg-rose-100 text-rose-600 hover:bg-rose-600 hover:text-white' 
@@ -187,7 +191,7 @@ const OrderManager: React.FC<Props> = ({ orders, setOrders, customers, products,
                   </div>
                   {order.status === 'Pending' ? (
                     <button
-                      onClick={(e) => handleMarkAsShipped(e, order.id)}
+                      onClick={(e) => { e.stopPropagation(); setConfirmShipId(order.id); }}
                       className={`w-9 h-9 flex items-center justify-center rounded-full transition-all shadow-sm active:scale-90 ${
                         isTodayShipment
                           ? 'bg-rose-100 text-rose-600 hover:bg-rose-600 hover:text-white'
@@ -211,7 +215,7 @@ const OrderManager: React.FC<Props> = ({ orders, setOrders, customers, products,
                 <div className="flex items-center gap-2">
                   <span className="text-sm font-bold text-slate-800">{firstProduct?.name || '商品なし'}</span>
                   <span className={`text-[10px] font-black px-1.5 py-0.5 rounded ${isTodayShipment ? 'text-rose-600 bg-rose-100' : 'text-indigo-500 bg-indigo-50'}`}>
-                    x {firstItem?.quantity}
+                    x {(firstItem?.quantity ?? 0).toLocaleString()}
                   </span>
                   {order.items.length > 1 && (
                     <span className="text-[10px] font-black text-slate-400">他 {order.items.length - 1} 点</span>
@@ -227,6 +231,34 @@ const OrderManager: React.FC<Props> = ({ orders, setOrders, customers, products,
           })
         )}
       </div>
+
+      {confirmShipId && (
+        <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-sm flex items-center justify-center z-[200] p-4">
+          <div className="bg-white rounded-[32px] w-full max-w-sm shadow-2xl p-8 text-center animate-in zoom-in-95 duration-200">
+            <div className="w-16 h-16 bg-emerald-50 rounded-full flex items-center justify-center mx-auto mb-6">
+              <Truck className="w-8 h-8 text-emerald-500" />
+            </div>
+            <h4 className="text-lg font-black text-slate-900 mb-3">出荷済みにしますか？</h4>
+            <p className="text-xs text-slate-400 mb-8 leading-relaxed font-bold">
+              この操作を実行すると在庫数が更新されます。
+            </p>
+            <div className="flex flex-col gap-3">
+              <button
+                onClick={handleConfirmShip}
+                className="w-full py-4 bg-emerald-600 text-white rounded-2xl font-black text-sm hover:bg-emerald-700 transition-all shadow-xl active:scale-95"
+              >
+                出荷済みにする
+              </button>
+              <button
+                onClick={() => setConfirmShipId(null)}
+                className="w-full py-4 bg-slate-100 text-slate-600 rounded-2xl font-bold text-sm hover:bg-slate-200 transition-all"
+              >
+                キャンセル
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

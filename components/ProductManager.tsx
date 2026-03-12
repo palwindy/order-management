@@ -1,7 +1,7 @@
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Product, Order } from '../types';
-import { PackagePlus, Search, Trash2, AlertTriangle, X, ShoppingCart } from 'lucide-react';
+import { PackagePlus, Search, Trash2, AlertTriangle, X } from 'lucide-react';
 
 interface Props {
   products: Product[];
@@ -14,8 +14,19 @@ const ProductManager: React.FC<Props> = ({ products, setProducts, orders }) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+  const [stockValue, setStockValue] = useState('');
+  const [isFocusingStock, setIsFocusingStock] = useState(false);
 
-  // 未出荷（Pending）の注文から各商品の需要数を計算
+  useEffect(() => {
+    if (isModalOpen) {
+      if (editingProduct) {
+        setStockValue(String(editingProduct.stock));
+      } else {
+        setStockValue('');
+      }
+    }
+  }, [isModalOpen, editingProduct]);
+
   const pendingCounts = useMemo(() => {
     const counts: Record<string, number> = {};
     orders.filter(o => o.status === 'Pending').forEach(order => {
@@ -45,7 +56,7 @@ const ProductManager: React.FC<Props> = ({ products, setProducts, orders }) => {
     const newProduct: Product = {
       id: editingProduct?.id || `p${Date.now()}`,
       name: formData.get('name') as string,
-      stock: parseInt(formData.get('stock') as string),
+      stock: parseInt(stockValue) || 0,
     };
 
     if (editingProduct) {
@@ -56,6 +67,11 @@ const ProductManager: React.FC<Props> = ({ products, setProducts, orders }) => {
     setIsModalOpen(false);
     setEditingProduct(null);
   };
+
+  const openModal = (product: Product | null) => {
+    setEditingProduct(product);
+    setIsModalOpen(true);
+  }
 
   return (
     <div className="space-y-4">
@@ -71,7 +87,7 @@ const ProductManager: React.FC<Props> = ({ products, setProducts, orders }) => {
           />
         </div>
         <button
-          onClick={() => { setEditingProduct(null); setIsModalOpen(true); }}
+          onClick={() => openModal(null)}
           className="w-full sm:w-auto flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2.5 rounded-xl transition-all text-sm font-bold shadow-lg shadow-indigo-100 active:scale-95"
         >
           <PackagePlus className="w-4 h-4" />
@@ -102,7 +118,7 @@ const ProductManager: React.FC<Props> = ({ products, setProducts, orders }) => {
                   return (
                     <tr 
                       key={product.id} 
-                      onClick={() => { setEditingProduct(product); setIsModalOpen(true); }}
+                      onClick={() => openModal(product)}
                       className="hover:bg-indigo-50/50 transition-colors group cursor-pointer"
                     >
                       <td className="px-3 sm:px-6 py-4 font-bold text-slate-800 text-sm sm:text-base leading-snug">
@@ -153,7 +169,16 @@ const ProductManager: React.FC<Props> = ({ products, setProducts, orders }) => {
               </div>
               <div>
                 <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">現在の在庫数</label>
-                <input name="stock" type="number" defaultValue={editingProduct?.stock} required className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all" />
+                <input 
+                  name="stock"
+                  type="text" 
+                  value={isFocusingStock ? stockValue : (stockValue === '' ? '' : Number(stockValue).toLocaleString())}
+                  onFocus={() => setIsFocusingStock(true)}
+                  onBlur={() => setIsFocusingStock(false)}
+                  onChange={(e) => setStockValue(e.target.value.replace(/,/g, ''))}
+                  required 
+                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all" 
+                />
               </div>
               
               <div className="pt-6 space-y-3">

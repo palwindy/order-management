@@ -157,7 +157,7 @@ const OrderCalendar: React.FC<Props> = ({ orders, customers, products, onEditOrd
                         {order.items.map((item, idx) => (
                           <div key={idx} className="flex justify-between text-[11px] font-bold text-slate-600">
                             <span className="truncate pr-4">{products.find(p => p.id === item.productId)?.name}</span>
-                            <span className="shrink-0">x {item.quantity}</span>
+                            <span className="shrink-0">x {item.quantity.toLocaleString()}</span>
                           </div>
                         ))}
                       </div>
