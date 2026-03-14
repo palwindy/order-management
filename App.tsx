@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { Customer, Product, Order } from './types';
 import { INITIAL_CUSTOMERS, INITIAL_PRODUCTS, INITIAL_ORDERS, CATEGORIES, DEFAULT_CATEGORY } from './constants';
+import { sortCustomersById } from './utils';
 import Dashboard from './components/Dashboard';
 import CustomerManager from './components/CustomerManager';
 import ProductManager from './components/ProductManager';
@@ -26,7 +27,7 @@ import * as XLSX from 'xlsx-js-style';
 import { db } from './firebase';
 import { collection, doc, setDoc, deleteDoc, getDocs, writeBatch } from 'firebase/firestore';
 
-const APP_VERSION = "Ver.1.53";
+const APP_VERSION = "Ver.1.54";
 const COMPANY_NAME = "注文管理システム";
 
 // Firestoreへの差分同期ヘルパー
@@ -312,10 +313,12 @@ const App: React.FC = () => {
 
         XLSX.utils.book_append_sheet(wb, ws, '注文一覧');
 
-        // --- 顧客マスタシート ---
+        // --- 顧客管理シート ---
         const customerHeaders = ['顧客ID', '会社名', '担当者', '郵便番号', '住所', '電話番号', 'FAX番号', 'メール', '備考'];
         const customerRows: any[][] = [customerHeaders];
-        customers.forEach(c => {
+        const sortedCustomers = sortCustomersById(customers);
+
+        sortedCustomers.forEach(c => {
             customerRows.push([
                 c.id,
                 c.company,
@@ -328,6 +331,7 @@ const App: React.FC = () => {
                 c.notes ?? '',
             ]);
         });
+
         const wsCustomers = XLSX.utils.aoa_to_sheet(customerRows);
         const customerRange = XLSX.utils.decode_range(wsCustomers['!ref']!)
         for (let R = customerRange.s.r; R <= customerRange.e.r; R++) {
@@ -350,7 +354,7 @@ const App: React.FC = () => {
             { wch: 12 }, { wch: 20 }, { wch: 14 }, { wch: 10 }, { wch: 30 },
             { wch: 14 }, { wch: 14 }, { wch: 24 }, { wch: 30 },
         ];
-        XLSX.utils.book_append_sheet(wb, wsCustomers, '顧客マスタ');
+        XLSX.utils.book_append_sheet(wb, wsCustomers, '顧客管理');
         
         // --- 商品マスタシート ---
         const categoryGroups = CATEGORIES.map(cat => ({
@@ -495,7 +499,7 @@ const App: React.FC = () => {
                 setOrdersFS(restoredOrders);
             }
 
-            // --- 顧客マスタシート ---
+            // --- 顧客管理シート ---
             const customerSheet = workbook.Sheets['顧客管理'];
             if (customerSheet) {
                 const customerRowData: any[][] = XLSX.utils.sheet_to_json(customerSheet, { header: 1 });

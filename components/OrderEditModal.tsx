@@ -1,8 +1,8 @@
-
 import React, { useState, useMemo } from 'react';
 import { Order, Customer, Product, OrderStatus, OrderItem } from '../types';
 import { CATEGORIES } from '../constants';
 import { X, Info, Trash2, AlertTriangle, MinusCircle, CheckCircle2 } from 'lucide-react';
+import { sortCustomersById } from '../utils';
 
 interface Props {
   isOpen: boolean;
@@ -70,6 +70,8 @@ const OrderEditModal: React.FC<Props> = ({ isOpen, onClose, editingOrder, custom
       ...categoryProducts.filter(p => !productHistory.includes(p.id)),
     ];
   };
+  
+  const sortedCustomers = sortCustomersById(customers);
 
   if (!isOpen) return null;
 
@@ -186,7 +188,7 @@ const OrderEditModal: React.FC<Props> = ({ isOpen, onClose, editingOrder, custom
                     className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl text-base font-bold appearance-none focus:ring-4 focus:ring-indigo-500/10 outline-none transition-all group-hover:bg-slate-100 text-slate-900"
                   >
                     <option value="">顧客を選択してください</option>
-                    {customers.map(c => <option key={c.id} value={c.id}>{c.company} ({c.name})</option>)}
+                    {sortedCustomers.map(c => <option key={c.id} value={c.id}>{c.id} {c.company} ({c.name})</option>)}
                   </select>
                   <div className="absolute right-5 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
                     <X className="w-4 h-4 rotate-45" />
