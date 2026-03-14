@@ -1,8 +1,37 @@
 import React, { useState, useEffect } from 'react';
 import { X, Calendar, CheckCircle2, AlertTriangle, Loader2, UserCircle } from 'lucide-react';
 
-const GOOGLE_CLIENT_ID = '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';
+const GOOGLE_CLIENT_ID = '257303131550-fce8qek7jjcthr5muu482jvdgrhotsfs.apps.googleusercontent.com';
 const GOOGLE_SCOPES = 'https://www.googleapis.com/auth/calendar.events';
+
+// モジュールレベル変数
+let _tokenClient: any = null;
+let _gisLoaded = false;
+
+const loadGIS = (): Promise<void> => {
+  return new Promise((resolve) => {
+    if (_gisLoaded && (window as any).google?.accounts?.oauth2) {
+      resolve();
+      return;
+    }
+    if ((window as any).google?.accounts?.oauth2) {
+      _gisLoaded = true;
+      resolve();
+      return;
+    }
+    const existing = document.querySelector('script[src="https://accounts.google.com/gsi/client"]');
+    if (existing) {
+      existing.addEventListener('load', () => { _gisLoaded = true; resolve(); });
+      return;
+    }
+    const script = document.createElement('script');
+    script.src = 'https://accounts.google.com/gsi/client';
+    script.async = true;
+    script.defer = true;
+    script.onload = () => { _gisLoaded = true; resolve(); };
+    document.body.appendChild(script);
+  });
+};
 
 interface Props {
   isOpen: boolean;
@@ -14,61 +43,66 @@ const CalendarSettings: React.FC<Props> = ({ isOpen, onClose }) => {
   const [connectedEmail, setConnectedEmail] = useState<string>(
     localStorage.getItem('googleCalendarEmail') || ''
   );
-  const [tokenClient, setTokenClient] = useState<any>(null);
   const [pendingEmail, setPendingEmail] = useState<string>('');
   const [pendingToken, setPendingToken] = useState<string>('');
+  const [isGISReady, setIsGISReady] = useState(!!_tokenClient);
 
   useEffect(() => {
-    const script = document.createElement('script');
-    script.src = 'https://accounts.google.com/gsi/client';
-    script.async = true;
-    script.defer = true;
-    script.onload = () => {
-      if (!(window as any).google?.accounts?.oauth2) {
-        console.error('Google Identity Services library failed to load.');
+    // すでに初期化済みならスキップ（Strict Mode の2回呼び出し対策）
+    if (_tokenClient) {
+      setIsGISReady(true);
+      return;
+    }
+
+    loadGIS().then(() => {
+      // 再チェック（非同期の間に別インスタンスが初期化した可能性）
+      if (_tokenClient) {
+        setIsGISReady(true);
         return;
       }
-      const client = (window as any).google.accounts.oauth2.initTokenClient({
+
+      _tokenClient = (window as any).google.accounts.oauth2.initTokenClient({
         client_id: GOOGLE_CLIENT_ID,
         scope: GOOGLE_SCOPES,
-        callback: async (tokenResponse: any) => {
-          if (tokenResponse.error) {
-            setSyncStatus('error');
-            return;
-          }
-          try {
-            const res = await fetch(
-              'https://www.googleapis.com/oauth2/v3/userinfo',
-              { headers: { Authorization: `Bearer ${tokenResponse.access_token}` } }
-            );
-            const userInfo = await res.json();
-            setPendingEmail(userInfo.email || '');
-            setPendingToken(tokenResponse.access_token);
-            setSyncStatus('idle');
-          } catch {
-            setSyncStatus('error');
-          }
-        },
+        // callbackはここでは設定しない→requestAccessToken時に渡す
       });
-      setTokenClient(client);
-    };
-    document.body.appendChild(script);
 
-    return () => {
-      document.body.removeChild(script);
-    };
+      setIsGISReady(true);
+    });
   }, []);
 
   const handleSelectAccount = () => {
-    if (!tokenClient) return;
-    tokenClient.requestAccessToken();
+    if (!_tokenClient) return;
+
+    // requestAccessToken にコールバックを直接渡す（クロージャー問題を完全回避）
+    _tokenClient.requestAccessToken({
+      callback: async (tokenResponse: any) => {
+        if (tokenResponse.error) {
+          setSyncStatus('error');
+          return;
+        }
+        try {
+          const res = await fetch(
+            'https://www.googleapis.com/oauth2/v3/userinfo',
+            { headers: { Authorization: `Bearer ${tokenResponse.access_token}` } }
+          );
+          const userInfo = await res.json();
+          setPendingEmail(userInfo.email || '');
+          setPendingToken(tokenResponse.access_token);
+          setSyncStatus('idle');
+        } catch {
+          setSyncStatus('error');
+        }
+      }
+    });
   };
 
   const handleSave = async () => {
     const emailToSave = pendingEmail || connectedEmail;
     const tokenToSave = pendingToken;
+
     if (!emailToSave) {
-      tokenClient?.requestAccessToken();
+      handleSelectAccount();
       return;
     }
     setSyncStatus('syncing');
@@ -87,13 +121,13 @@ const CalendarSettings: React.FC<Props> = ({ isOpen, onClose }) => {
       setTimeout(() => setSyncStatus('idle'), 3000);
     }
   };
-  
+
   if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-[100] p-4">
       <div className="bg-white rounded-[32px] w-full max-w-md shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
-        
+
         {/* ヘッダー */}
         <div className="p-6 border-b border-slate-100 flex justify-between items-center">
           <div className="flex items-center gap-3">
@@ -107,30 +141,22 @@ const CalendarSettings: React.FC<Props> = ({ isOpen, onClose }) => {
               </p>
             </div>
           </div>
-          <button
-            onClick={onClose}
-            className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-slate-100 text-slate-400 transition-colors"
-          >
+          <button onClick={onClose} className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-slate-100 text-slate-400 transition-colors">
             <X className="w-5 h-5" />
           </button>
         </div>
 
         {/* 本文 */}
         <div className="p-6 space-y-5">
-
-          {/* 説明文 */}
           <div className="bg-indigo-50 rounded-2xl p-4 text-sm text-indigo-700 font-bold leading-relaxed">
-            Google カレンダーと連携すると、出荷予定を自動で
-            Google カレンダーに登録できます。
+            Google カレンダーと連携すると、出荷予定を自動で Google カレンダーに登録できます。
           </div>
 
-          {/* アカウント選択＋保存ボタン（横並び） */}
           <div className="flex items-center gap-3">
-            {/* アカウント表示エリア（左側・flex-1） */}
             <button
               onClick={handleSelectAccount}
-              disabled={syncStatus === 'syncing'}
-              className="flex-1 flex items-center gap-3 px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-left hover:bg-white hover:border-indigo-300 transition-all"
+              disabled={syncStatus === 'syncing' || !isGISReady}
+              className="flex-1 flex items-center gap-3 px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-left hover:bg-white hover:border-indigo-300 transition-all disabled:opacity-60"
             >
               <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center flex-shrink-0">
                 <UserCircle className="w-5 h-5 text-indigo-500" />
@@ -148,13 +174,12 @@ const CalendarSettings: React.FC<Props> = ({ isOpen, onClose }) => {
                   </>
                 ) : (
                   <p className="text-sm font-bold text-slate-400">
-                    連携するGoogleアカウントを選んでください
+                    {isGISReady ? '連携するGoogleアカウントを選んでください' : '読み込み中...'}
                   </p>
                 )}
               </div>
             </button>
 
-            {/* 保存ボタン（右側・固定幅） */}
             <button
               onClick={handleSave}
               disabled={syncStatus === 'syncing'}
@@ -173,9 +198,7 @@ const CalendarSettings: React.FC<Props> = ({ isOpen, onClose }) => {
                syncStatus === 'error'   ? '同期エラー' : '保存'}
             </button>
           </div>
-
         </div>
-
       </div>
     </div>
   );
