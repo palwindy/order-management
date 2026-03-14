@@ -8,6 +8,16 @@ interface Props {
   setCustomers: React.Dispatch<React.SetStateAction<Customer[]>>;
 }
 
+const generateCustomerId = (customers: Customer[]): string => {
+  const numbers = customers
+    .map(c => {
+      const match = c.id.match(/^C(\d+)$/i);
+      return match ? parseInt(match[1], 10) : 0;
+    });
+  const max = numbers.length > 0 ? Math.max(...numbers) : 0;
+  return `C${String(max + 1).padStart(3, '0')}`;
+};
+
 const CustomerManager: React.FC<Props> = ({ customers, setCustomers }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -85,7 +95,7 @@ const CustomerManager: React.FC<Props> = ({ customers, setCustomers }) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
     const newCustomer: Customer = {
-      id: editingCustomer?.id || `c${Date.now()}`,
+      id: editingCustomer?.id || generateCustomerId(customers),
       name: formData.get('name') as string,
       company: formData.get('company') as string,
       email: formData.get('email') as string,

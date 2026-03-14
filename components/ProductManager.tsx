@@ -10,6 +10,16 @@ interface Props {
   orders: Order[];
 }
 
+const generateProductId = (products: Product[]): string => {
+  const numbers = products
+    .map(p => {
+      const match = p.id.match(/^P(\d+)$/i);
+      return match ? parseInt(match[1], 10) : 0;
+    });
+  const max = numbers.length > 0 ? Math.max(...numbers) : 0;
+  return `P${String(max + 1).padStart(3, '0')}`;
+};
+
 const ProductManager: React.FC<Props> = ({ products, setProducts, orders }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -55,7 +65,7 @@ const ProductManager: React.FC<Props> = ({ products, setProducts, orders }) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
     const newProduct: Product = {
-      id: editingProduct?.id || `p${Date.now()}`,
+      id: editingProduct?.id || generateProductId(products),
       name: formData.get('name') as string,
       category: formData.get('category') as string,
       stock: parseInt(stockValue) || 0,

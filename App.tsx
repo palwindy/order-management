@@ -26,7 +26,7 @@ import * as XLSX from 'xlsx-js-style';
 import { db } from './firebase';
 import { collection, doc, setDoc, deleteDoc, getDocs, writeBatch } from 'firebase/firestore';
 
-const APP_VERSION = "Ver.1.51";
+const APP_VERSION = "Ver.1.52";
 const COMPANY_NAME = "注文管理システム";
 
 // Firestoreへの差分同期ヘルパー
@@ -353,10 +353,10 @@ const App: React.FC = () => {
         XLSX.utils.book_append_sheet(wb, wsCustomers, '顧客マスタ');
         
         // --- 商品マスタシート ---
-        const productHeaders = ['商品ID', '商品名', 'カテゴリー', '在庫数'];
+        const productHeaders = ['商品ID', 'カテゴリー', '商品名', '在庫数'];
         const productRows: any[][] = [productHeaders];
         products.forEach(p => {
-            productRows.push([p.id, p.name, p.category || '', p.stock]);
+            productRows.push([p.id, p.category || '', p.name, p.stock]);
         });
         const wsProducts = XLSX.utils.aoa_to_sheet(productRows);
         const productRange = XLSX.utils.decode_range(wsProducts['!ref']!)
@@ -377,7 +377,10 @@ const App: React.FC = () => {
             }
         }
         wsProducts['!cols'] = [
-            { wch: 12 }, { wch: 24 }, { wch: 18 }, { wch: 10 },
+            { wch: 10 },
+            { wch: 18 },
+            { wch: 28 },
+            { wch: 10 },
         ];
         XLSX.utils.book_append_sheet(wb, wsProducts, '商品マスタ');
 
@@ -478,8 +481,8 @@ const App: React.FC = () => {
                     .filter(row => row[0])
                     .map(row => ({
                         id:       String(row[0] ?? ''),
-                        name:     String(row[1] ?? ''),
-                        category: String(row[2] ?? ''),
+                        category: String(row[1] ?? ''),
+                        name:     String(row[2] ?? ''),
                         stock:    Number(row[3]) || 0,
                     }));
                 setProductsFS(newProducts);
