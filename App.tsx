@@ -30,7 +30,7 @@ import { db } from './firebase';
 import { collection, doc, setDoc, deleteDoc, getDocs, writeBatch } from 'firebase/firestore';
 import toast, { Toaster } from 'react-hot-toast';
 
-const APP_VERSION = "Ver.1.57";
+const APP_VERSION = "Ver.1.59";
 const COMPANY_NAME = "注文管理システム";
 
 // Firestoreへの差分同期ヘルパー
