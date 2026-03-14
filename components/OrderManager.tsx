@@ -111,7 +111,7 @@ const OrderManager: React.FC<Props> = ({ orders, setOrders, customers, products,
                         <div className="text-[11px] font-bold text-slate-400">{customer?.name} 様</div>
                       </td>
                       <td className="px-6 py-5">
-                        <div className="font-bold text-slate-800">{firstProduct?.name || '商品なし'}</div>
+                        <div className="font-bold text-slate-800">{firstProduct?.name || firstItem?.productId || '商品なし'}</div>
                         <div className="flex items-center gap-2 mt-1">
                           <span className={`text-[10px] font-black px-1.5 py-0.5 rounded ${isTodayShipment ? 'text-rose-600 bg-rose-100' : 'text-indigo-500 bg-indigo-50'}`}>x {(firstItem?.quantity ?? 0).toLocaleString()}</span>
                           {order.items.length > 1 && (
@@ -213,7 +213,7 @@ const OrderManager: React.FC<Props> = ({ orders, setOrders, customers, products,
                 </div>
 
                 <div className="flex items-center gap-2">
-                  <span className="text-sm font-bold text-slate-800">{firstProduct?.name || '商品なし'}</span>
+                  <span className="text-sm font-bold text-slate-800">{firstProduct?.name || firstItem?.productId || '商品なし'}</span>
                   <span className={`text-[10px] font-black px-1.5 py-0.5 rounded ${isTodayShipment ? 'text-rose-600 bg-rose-100' : 'text-indigo-500 bg-indigo-50'}`}>
                     x {(firstItem?.quantity ?? 0).toLocaleString()}
                   </span>

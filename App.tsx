@@ -26,7 +26,7 @@ import * as XLSX from 'xlsx-js-style';
 import { db } from './firebase';
 import { collection, doc, setDoc, deleteDoc, getDocs, writeBatch } from 'firebase/firestore';
 
-const APP_VERSION = "Ver.1.50";
+const APP_VERSION = "Ver.1.51";
 const COMPANY_NAME = "注文管理システム";
 
 // Firestoreへの差分同期ヘルパー
@@ -264,7 +264,7 @@ const App: React.FC = () => {
             } else {
                 order.items.forEach((item, index) => {
                     const product = products.find(p => p.id === item.productId);
-                    const productName = product?.name || '';
+                    const productName = product?.name || item.productId || '';
                     const subtotal = item.quantity * item.unitPrice;
 
                     if (index === 0) {
