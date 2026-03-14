@@ -26,8 +26,9 @@ import OrderEditModal from './components/OrderEditModal';
 import * as XLSX from 'xlsx-js-style';
 import { db } from './firebase';
 import { collection, doc, setDoc, deleteDoc, getDocs, writeBatch } from 'firebase/firestore';
+import toast, { Toaster } from 'react-hot-toast';
 
-const APP_VERSION = "Ver.1.54";
+const APP_VERSION = "Ver.1.55";
 const COMPANY_NAME = "注文管理システム";
 
 // Firestoreへの差分同期ヘルパー
@@ -109,7 +110,7 @@ const App: React.FC = () => {
         }
       } catch (error) {
         console.error('Firestoreからのデータ読み込みエラー:', error);
-        alert('データの読み込みに失敗しました。');
+        toast.error('データの読み込みに失敗しました。');
       } finally {
         setIsLoading(false);
       }
@@ -234,6 +235,7 @@ const App: React.FC = () => {
   };
   
   const exportToExcel = () => {
+    const toastId = toast.loading('Excelファイルを作成中...');
     try {
         const today = new Date();
         const year = today.getFullYear();
@@ -433,10 +435,10 @@ const App: React.FC = () => {
         XLSX.utils.book_append_sheet(wb, wsProducts, '商品マスタ');
 
         XLSX.writeFile(wb, fileName);
-        alert("Excelファイルを出力しました。");
+        toast.success('Excelファイルを出力しました。', { id: toastId });
     } catch (e) {
         console.error(e);
-        alert("Excelファイルの出力に失敗しました。");
+        toast.error('Excelファイルの出力に失敗しました。', { id: toastId });
     }
   };
 
@@ -497,10 +499,11 @@ const App: React.FC = () => {
                     totalAmount: o.items.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0),
                 }));
                 setOrdersFS(restoredOrders);
+                toast.success(`注文データを ${restoredOrders.length} 件復元しました。`);
             }
 
-            // --- 顧客管理シート ---
-            const customerSheet = workbook.Sheets['顧客管理'];
+            // --- 顧客マスタシート ---
+            const customerSheet = workbook.Sheets['顧客管理'] ?? workbook.Sheets['顧客マスタ'];
             if (customerSheet) {
                 const customerRowData: any[][] = XLSX.utils.sheet_to_json(customerSheet, { header: 1 });
                 const newCustomers: Customer[] = customerRowData
@@ -517,7 +520,14 @@ const App: React.FC = () => {
                         email:   String(row[7] ?? '').trim(),
                         notes:   String(row[8] ?? '').trim(),
                     }));
-                setCustomersFS(newCustomers);
+                if (newCustomers.length === 0) {
+                    toast.error('顧客データが見つかりませんでした。シート名を確認してください。');
+                } else {
+                    setCustomersFS(newCustomers);
+                    toast.success(`顧客データを ${newCustomers.length} 件復元しました。`);
+                }
+            } else {
+                toast.error('「顧客管理」シートが見つかりません。シート名を確認してください。');
             }
 
             // --- 商品マスタシート ---
@@ -554,13 +564,17 @@ const App: React.FC = () => {
                 });
               });
 
-              setProductsFS(newProducts);
+              if (newProducts.length === 0) {
+                  toast.error('商品データが見つかりませんでした。');
+              } else {
+                  setProductsFS(newProducts);
+                  toast.success(`商品データを ${newProducts.length} 件復元しました。`);
+              }
             }
 
-            alert("Excelからデータを復元しました。");
         } catch (error) {
             console.error("Excel import error:", error);
-            alert("Excelファイルの読み込みに失敗しました。");
+            toast.error("Excelファイルの読み込みに失敗しました。");
         } finally {
             if (fileInputRef.current) fileInputRef.current.value = "";
         }
@@ -588,6 +602,7 @@ const App: React.FC = () => {
 
   return (
     <div className="flex h-screen bg-slate-100 font-sans">
+      <Toaster position="top-center" />
       {isSidebarOpen && (
         <div
           className="fixed inset-0 z-20 bg-slate-900/40 backdrop-blur-sm md:hidden"
