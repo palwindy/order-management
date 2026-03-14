@@ -1,13 +1,22 @@
-
 import { Customer, Product, Order } from './types';
 
 export const CATEGORIES: string[] = [
   '裏白',
   'ゆずり葉',
   'しめ縄',
-  '関西ゴンボ関係',
+  '関西ゴンボ',
   'その他・未定',
 ];
+
+export const CATEGORY_PREFIX: Record<string, string> = {
+  '裏白':       'U',
+  'ゆずり葉':   'Y',
+  'しめ縄':     'S',
+  '関西ゴンボ': 'G',
+  'その他・未定': 'Z',
+};
+
+export const DEFAULT_CATEGORY = 'その他・未定';
 
 export const INITIAL_CUSTOMERS: Customer[] = [
   { id: 'c1', name: '田中 太郎', company: '株式会社テック', email: 'tanaka@example.com', phone: '03-1234-5678', fax: '03-1234-5679', zipCode: '150-0002', address: '東京都渋谷区渋谷' },

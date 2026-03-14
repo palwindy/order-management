@@ -15,7 +15,7 @@ import {
   AlertTriangle,
 } from 'lucide-react';
 import { Customer, Product, Order } from './types';
-import { INITIAL_CUSTOMERS, INITIAL_PRODUCTS, INITIAL_ORDERS } from './constants';
+import { INITIAL_CUSTOMERS, INITIAL_PRODUCTS, INITIAL_ORDERS, CATEGORIES, DEFAULT_CATEGORY } from './constants';
 import Dashboard from './components/Dashboard';
 import CustomerManager from './components/CustomerManager';
 import ProductManager from './components/ProductManager';
@@ -26,7 +26,7 @@ import * as XLSX from 'xlsx-js-style';
 import { db } from './firebase';
 import { collection, doc, setDoc, deleteDoc, getDocs, writeBatch } from 'firebase/firestore';
 
-const APP_VERSION = "Ver.1.52";
+const APP_VERSION = "Ver.1.53";
 const COMPANY_NAME = "注文管理システム";
 
 // Firestoreへの差分同期ヘルパー
@@ -353,35 +353,79 @@ const App: React.FC = () => {
         XLSX.utils.book_append_sheet(wb, wsCustomers, '顧客マスタ');
         
         // --- 商品マスタシート ---
-        const productHeaders = ['商品ID', 'カテゴリー', '商品名', '在庫数'];
-        const productRows: any[][] = [productHeaders];
-        products.forEach(p => {
-            productRows.push([p.id, p.category || '', p.name, p.stock]);
+        const categoryGroups = CATEGORIES.map(cat => ({
+          category: cat,
+          items: products.filter(p => p.category === cat),
+        }));
+
+        const maxRows = Math.max(...categoryGroups.map(g => g.items.length));
+
+        const COL_PER_GROUP = 4;
+        const COL_SPACER = 1;
+
+        const headerRow: any[] = [];
+        categoryGroups.forEach((group, groupIdx) => {
+          const offset = groupIdx * (COL_PER_GROUP + COL_SPACER);
+          headerRow[offset]     = '商品ID';
+          headerRow[offset + 1] = 'カテゴリー';
+          headerRow[offset + 2] = '商品名';
+          headerRow[offset + 3] = '在庫数';
         });
-        const wsProducts = XLSX.utils.aoa_to_sheet(productRows);
-        const productRange = XLSX.utils.decode_range(wsProducts['!ref']!)
-        for (let R = productRange.s.r; R <= productRange.e.r; R++) {
-            for (let C = productRange.s.c; C <= productRange.e.c; C++) {
-                const cellAddr = XLSX.utils.encode_cell({ r: R, c: C });
-                if (!wsProducts[cellAddr]) wsProducts[cellAddr] = { v: '', t: 's' };
-                wsProducts[cellAddr].s = {
-                    border: {
-                        top: { style: 'thin', color: { rgb: '000000' } },
-                        bottom: { style: 'thin', color: { rgb: '000000' } },
-                        left: { style: 'thin', color: { rgb: '000000' } },
-                        right: { style: 'thin', color: { rgb: '000000' } },
-                    },
-                    font: R === 0 ? { bold: true } : undefined,
-                    fill: R === 0 ? { fgColor: { rgb: 'E8EAF6' } } : undefined,
-                };
+
+        const dataRows: any[][] = [];
+        for (let rowIdx = 0; rowIdx < maxRows; rowIdx++) {
+          const row: any[] = [];
+          categoryGroups.forEach((group, groupIdx) => {
+            const offset = groupIdx * (COL_PER_GROUP + COL_SPACER);
+            const item = group.items[rowIdx];
+            if (item) {
+              row[offset]     = item.id;
+              row[offset + 1] = item.category;
+              row[offset + 2] = item.name;
+              row[offset + 3] = item.stock;
             }
+          });
+          dataRows.push(row);
         }
-        wsProducts['!cols'] = [
-            { wch: 10 },
-            { wch: 18 },
-            { wch: 28 },
-            { wch: 10 },
-        ];
+
+        const productAoa = [headerRow, ...dataRows];
+        const wsProducts = XLSX.utils.aoa_to_sheet(productAoa);
+
+        const applyBorderStyle = (ws: any, startCol: number, rowCount: number) => {
+          for (let R = 0; R <= rowCount; R++) {
+            for (let C = startCol; C < startCol + COL_PER_GROUP; C++) {
+              const cellAddr = XLSX.utils.encode_cell({ r: R, c: C });
+              if (!ws[cellAddr]) ws[cellAddr] = { v: '', t: 's' };
+              ws[cellAddr].s = {
+                border: {
+                  top:    { style: 'thin', color: { rgb: '000000' } },
+                  bottom: { style: 'thin', color: { rgb: '000000' } },
+                  left:   { style: 'thin', color: { rgb: '000000' } },
+                  right:  { style: 'thin', color: { rgb: '000000' } },
+                },
+                font: R === 0 ? { bold: true } : undefined,
+                fill: R === 0 ? { fgColor: { rgb: 'E8EAF6' } } : undefined,
+              };
+            }
+          }
+        };
+
+        categoryGroups.forEach((_, groupIdx) => {
+          const startCol = groupIdx * (COL_PER_GROUP + COL_SPACER);
+          applyBorderStyle(wsProducts, startCol, maxRows);
+        });
+
+        const colWidths: any[] = [];
+        categoryGroups.forEach((_, groupIdx) => {
+          const offset = groupIdx * (COL_PER_GROUP + COL_SPACER);
+          colWidths[offset]     = { wch: 10 };
+          colWidths[offset + 1] = { wch: 14 };
+          colWidths[offset + 2] = { wch: 28 };
+          colWidths[offset + 3] = { wch:  8 };
+          colWidths[offset + 4] = { wch:  2 };
+        });
+        wsProducts['!cols'] = colWidths;
+
         XLSX.utils.book_append_sheet(wb, wsProducts, '商品マスタ');
 
         XLSX.writeFile(wb, fileName);
@@ -452,22 +496,22 @@ const App: React.FC = () => {
             }
 
             // --- 顧客マスタシート ---
-            const customerSheet = workbook.Sheets['顧客マスタ'];
+            const customerSheet = workbook.Sheets['顧客管理'];
             if (customerSheet) {
                 const customerRowData: any[][] = XLSX.utils.sheet_to_json(customerSheet, { header: 1 });
-                const customerDataRows = customerRowData.slice(1);
-                const newCustomers: Customer[] = customerDataRows
-                    .filter(row => row[0])
+                const newCustomers: Customer[] = customerRowData
+                    .slice(1)
+                    .filter(row => row[0] && String(row[0]).trim() !== '')
                     .map(row => ({
-                        id: String(row[0] ?? ''),
-                        company: String(row[1] ?? ''),
-                        name: String(row[2] ?? ''),
-                        zipCode: String(row[3] ?? ''),
-                        address: String(row[4] ?? ''),
-                        phone: String(row[5] ?? ''),
-                        fax: String(row[6] ?? ''),
-                        email: String(row[7] ?? ''),
-                        notes: String(row[8] ?? ''),
+                        id:      String(row[0] ?? '').trim(),
+                        company: String(row[1] ?? '').trim(),
+                        name:    String(row[2] ?? '').trim(),
+                        zipCode: String(row[3] ?? '').trim(),
+                        address: String(row[4] ?? '').trim(),
+                        phone:   String(row[5] ?? '').trim(),
+                        fax:     String(row[6] ?? '').trim(),
+                        email:   String(row[7] ?? '').trim(),
+                        notes:   String(row[8] ?? '').trim(),
                     }));
                 setCustomersFS(newCustomers);
             }
@@ -475,17 +519,38 @@ const App: React.FC = () => {
             // --- 商品マスタシート ---
             const productSheet = workbook.Sheets['商品マスタ'];
             if (productSheet) {
-                const productRowData: any[][] = XLSX.utils.sheet_to_json(productSheet, { header: 1 });
-                const productDataRows = productRowData.slice(1);
-                const newProducts: Product[] = productDataRows
-                    .filter(row => row[0])
-                    .map(row => ({
-                        id:       String(row[0] ?? ''),
-                        category: String(row[1] ?? ''),
-                        name:     String(row[2] ?? ''),
-                        stock:    Number(row[3]) || 0,
-                    }));
-                setProductsFS(newProducts);
+              const allRows: any[][] = XLSX.utils.sheet_to_json(productSheet, { header: 1 });
+              if (allRows.length < 2) return;
+
+              const headerRow = allRows[0] as any[];
+              const dataRows = allRows.slice(1);
+
+              const idColIndices: number[] = [];
+              headerRow.forEach((cell, colIdx) => {
+                if (cell === '商品ID') idColIndices.push(colIdx);
+              });
+
+              const newProducts: Product[] = [];
+
+              dataRows.forEach(row => {
+                idColIndices.forEach(startCol => {
+                  const id       = row[startCol];
+                  const category = row[startCol + 1];
+                  const name     = row[startCol + 2];
+                  const stock    = row[startCol + 3];
+
+                  if (id && String(id).trim() !== '') {
+                    newProducts.push({
+                      id:       String(id).trim(),
+                      category: String(category ?? '').trim() || DEFAULT_CATEGORY,
+                      name:     String(name ?? '').trim(),
+                      stock:    Number(stock) || 0,
+                    });
+                  }
+                });
+              });
+
+              setProductsFS(newProducts);
             }
 
             alert("Excelからデータを復元しました。");

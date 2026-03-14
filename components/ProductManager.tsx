@@ -1,7 +1,6 @@
-
 import React, { useState, useMemo, useEffect } from 'react';
 import { Product, Order } from '../types';
-import { CATEGORIES } from '../constants';
+import { CATEGORIES, CATEGORY_PREFIX, DEFAULT_CATEGORY } from '../constants';
 import { PackagePlus, Search, Trash2, AlertTriangle, X } from 'lucide-react';
 
 interface Props {
@@ -10,14 +9,16 @@ interface Props {
   orders: Order[];
 }
 
-const generateProductId = (products: Product[]): string => {
+const generateProductId = (products: Product[], category: string): string => {
+  const prefix = CATEGORY_PREFIX[category] || 'Z';
   const numbers = products
+    .filter(p => p.id.startsWith(prefix))
     .map(p => {
-      const match = p.id.match(/^P(\d+)$/i);
+      const match = p.id.match(new RegExp(`^${prefix}(\d+)$`, 'i'));
       return match ? parseInt(match[1], 10) : 0;
     });
   const max = numbers.length > 0 ? Math.max(...numbers) : 0;
-  return `P${String(max + 1).padStart(3, '0')}`;
+  return `${prefix}${String(max + 1).padStart(3, '0')}`;
 };
 
 const ProductManager: React.FC<Props> = ({ products, setProducts, orders }) => {
@@ -64,10 +65,11 @@ const ProductManager: React.FC<Props> = ({ products, setProducts, orders }) => {
   const handleSave = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
+    const category = (formData.get('category') as string) || DEFAULT_CATEGORY;
     const newProduct: Product = {
-      id: editingProduct?.id || generateProductId(products),
+      id: editingProduct?.id || generateProductId(products, category),
       name: formData.get('name') as string,
-      category: formData.get('category') as string,
+      category: category,
       stock: parseInt(stockValue) || 0,
     };
 
@@ -206,7 +208,7 @@ const ProductManager: React.FC<Props> = ({ products, setProducts, orders }) => {
                 </label>
                 <select
                   name="category"
-                  defaultValue={editingProduct?.category || ''}
+                  defaultValue={editingProduct?.category || DEFAULT_CATEGORY}
                   required
                   className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
                 >
