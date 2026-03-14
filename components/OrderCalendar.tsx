@@ -49,6 +49,12 @@ const OrderCalendar: React.FC<Props> = ({ orders, customers, products, onEditOrd
             </button>
           </div>
         </div>
+        <button
+          onClick={() => setCurrentDate(new Date())}
+          className="px-4 py-2 text-sm font-black text-indigo-600 bg-indigo-50 hover:bg-indigo-100 rounded-xl transition-all active:scale-95"
+        >
+          今日
+        </button>
       </div>
 
       <div className="grid grid-cols-7 border-b border-slate-100 bg-slate-50 shrink-0">
@@ -73,35 +79,42 @@ const OrderCalendar: React.FC<Props> = ({ orders, customers, products, onEditOrd
             <button 
               key={day.toISOString()} 
               onClick={() => setSelectedDay(day)}
-              className="bg-white min-h-0 p-2 flex flex-col text-left group hover:bg-indigo-50 transition-all focus:outline-none"
+              className="bg-white min-h-0 p-1 flex flex-col text-left group hover:bg-indigo-50 transition-all focus:outline-none"
             >
-              <div className="flex justify-between items-center mb-1">
+              <div className="flex justify-between items-center mb-0.5">
                 <span className={`text-sm font-bold flex items-center justify-center w-7 h-7 rounded-lg transition-colors ${
                   isToday ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-100' : 'text-slate-500 group-hover:text-indigo-600'
                 }`}>
                   {format(day, 'd')}
                 </span>
                 {dayOrders.length > 0 && (
-                  <span className="text-[10px] bg-emerald-50 text-emerald-600 px-1.5 py-0.5 rounded-md font-black ring-1 ring-emerald-100">
+                  <span className="text-[9px] bg-emerald-50 text-emerald-600 px-1 py-0 rounded-md font-black ring-1 ring-emerald-100">
                     {dayOrders.length}件
                   </span>
                 )}
               </div>
               
               <div className="flex-1 overflow-hidden space-y-1 pr-0.5">
-                {dayOrders.slice(0, 3).map(order => {
+                {dayOrders.slice(0, 4).map(order => {
                   const customer = customers.find(c => c.id === order.customerId);
+                  const isPending = order.status === 'Pending';
                   return (
-                    <div 
-                      key={order.id} 
-                      className="text-[9px] p-1 rounded-md border border-indigo-50 bg-indigo-50/50 text-indigo-900 leading-tight truncate font-bold"
+                    <div
+                      key={order.id}
+                      className={`text-[9px] leading-tight truncate font-bold pl-0.5 border-l-2 ${
+                        isPending
+                          ? 'text-indigo-700 border-indigo-400'
+                          : 'text-slate-400 border-slate-300 line-through'
+                      }`}
                     >
                       {customer?.company || customer?.name || '不明'}
                     </div>
                   );
                 })}
-                {dayOrders.length > 3 && (
-                  <div className="text-[8px] text-slate-400 font-bold pl-1 italic">+ {dayOrders.length - 3} 件</div>
+                {dayOrders.length > 4 && (
+                  <div className="text-[8px] text-slate-400 font-bold pl-1">
+                    +{dayOrders.length - 4}
+                  </div>
                 )}
               </div>
             </button>

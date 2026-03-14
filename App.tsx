@@ -13,6 +13,7 @@ import {
   Loader2,
   FileSpreadsheet,
   AlertTriangle,
+  Settings,
 } from 'lucide-react';
 import { Customer, Product, Order } from './types';
 import { INITIAL_CUSTOMERS, INITIAL_PRODUCTS, INITIAL_ORDERS, CATEGORIES, DEFAULT_CATEGORY } from './constants';
@@ -23,12 +24,13 @@ import ProductManager from './components/ProductManager';
 import OrderManager from './components/OrderManager';
 import OrderCalendar from './components/OrderCalendar';
 import OrderEditModal from './components/OrderEditModal';
+import CalendarSettings from './components/CalendarSettings';
 import * as XLSX from 'xlsx-js-style';
 import { db } from './firebase';
 import { collection, doc, setDoc, deleteDoc, getDocs, writeBatch } from 'firebase/firestore';
 import toast, { Toaster } from 'react-hot-toast';
 
-const APP_VERSION = "Ver.1.55";
+const APP_VERSION = "Ver.1.57";
 const COMPANY_NAME = "注文管理システム";
 
 // Firestoreへの差分同期ヘルパー
@@ -63,6 +65,7 @@ const App: React.FC = () => {
   
   const [isLoading, setIsLoading] = useState(true);
   const [isOrderModalOpen, setIsOrderModalOpen] = useState(false);
+  const [isCalendarSettingsOpen, setIsCalendarSettingsOpen] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
 
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -688,6 +691,15 @@ const App: React.FC = () => {
               </span>
             </div>
           )}
+          {activeTab === 'calendar' && (
+            <button
+              onClick={() => setIsCalendarSettingsOpen(true)}
+              className="p-2 rounded-xl hover:bg-slate-100 text-slate-400 hover:text-indigo-600 transition-all"
+              title="カレンダー設定"
+            >
+              <Settings className="w-5 h-5" />
+            </button>
+          )}
         </header>
 
         <main className="flex-1 overflow-y-auto p-3">
@@ -712,6 +724,12 @@ const App: React.FC = () => {
           onDelete={handleDeleteOrder}
         />
       )}
+
+      <CalendarSettings
+        isOpen={isCalendarSettingsOpen}
+        onClose={() => setIsCalendarSettingsOpen(false)}
+      />
+
     </div>
   );
 };
