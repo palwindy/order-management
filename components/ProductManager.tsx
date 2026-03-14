@@ -1,6 +1,7 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
 import { Product, Order } from '../types';
+import { CATEGORIES } from '../constants';
 import { PackagePlus, Search, Trash2, AlertTriangle, X } from 'lucide-react';
 
 interface Props {
@@ -37,7 +38,7 @@ const ProductManager: React.FC<Props> = ({ products, setProducts, orders }) => {
     return counts;
   }, [orders]);
 
-  const filteredProducts = products.filter(p => 
+  const filteredProducts = products.filter(p =>
     p.name.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
@@ -56,6 +57,7 @@ const ProductManager: React.FC<Props> = ({ products, setProducts, orders }) => {
     const newProduct: Product = {
       id: editingProduct?.id || `p${Date.now()}`,
       name: formData.get('name') as string,
+      category: formData.get('category') as string,
       stock: parseInt(stockValue) || 0,
     };
 
@@ -71,6 +73,18 @@ const ProductManager: React.FC<Props> = ({ products, setProducts, orders }) => {
   const openModal = (product: Product | null) => {
     setEditingProduct(product);
     setIsModalOpen(true);
+  }
+
+  const groupedProducts = CATEGORIES.map(cat => ({
+    category: cat,
+    items: filteredProducts.filter(p => p.category === cat),
+  })).filter(group => group.items.length > 0);
+
+  const uncategorized = filteredProducts.filter(
+    p => !p.category || !CATEGORIES.includes(p.category)
+  );
+  if (uncategorized.length > 0) {
+    groupedProducts.push({ category: 'その他・未定', items: uncategorized });
   }
 
   return (
@@ -113,42 +127,51 @@ const ProductManager: React.FC<Props> = ({ products, setProducts, orders }) => {
                   <td colSpan={3} className="px-6 py-12 text-center text-slate-400 font-medium">登録されている商品はありません</td>
                 </tr>
               ) : (
-                filteredProducts.map(product => {
-                  const pendingCount = pendingCounts[product.id] || 0;
-                  return (
-                    <tr 
-                      key={product.id} 
-                      onClick={() => openModal(product)}
-                      className="hover:bg-indigo-50/50 transition-colors group cursor-pointer"
-                    >
-                      <td className="px-3 sm:px-6 py-4 font-bold text-slate-800 text-sm sm:text-base leading-snug">
-                        <div className="line-clamp-2 group-hover:text-indigo-600 transition-colors break-words">
-                          {product.name}
-                        </div>
-                      </td>
-                      <td className="px-1 py-4 text-right">
-                        <div className="flex items-center justify-end">
-                          <span className={`inline-block px-2.5 py-1.5 rounded-lg font-black text-xs sm:text-sm min-w-[45px] text-center ${
-                            pendingCount > 0 ? 'bg-indigo-50 text-indigo-600 ring-1 ring-indigo-100' : 'text-slate-300'
-                          }`}>
-                            {pendingCount.toLocaleString()}
-                          </span>
-                        </div>
-                      </td>
-                      <td className="px-3 sm:px-6 py-4 text-right">
-                        <div className="flex items-center justify-end">
-                          <span className={`inline-block min-w-[65px] px-2.5 py-1.5 rounded-lg font-black text-xs sm:text-sm text-right ${
-                            product.stock <= 0 ? 'bg-red-50 text-red-600 ring-1 ring-red-100' : 
-                            product.stock < 10 ? 'bg-amber-50 text-amber-600 ring-1 ring-amber-100' : 
-                            'bg-slate-50 text-slate-900 ring-1 ring-slate-100'
-                          }`}>
-                            {product.stock.toLocaleString()}
-                          </span>
-                        </div>
+                groupedProducts.map(({ category, items }) => (
+                  <React.Fragment key={category}>
+                    <tr className="bg-indigo-50/60">
+                      <td colSpan={3} className="px-3 sm:px-6 py-2 text-xs font-black text-indigo-500 tracking-widest">
+                        {category}
                       </td>
                     </tr>
-                  );
-                })
+                    {items.map(product => {
+                      const pendingCount = pendingCounts[product.id] || 0;
+                      return (
+                        <tr 
+                          key={product.id} 
+                          onClick={() => openModal(product)}
+                          className="hover:bg-indigo-50/50 transition-colors group cursor-pointer"
+                        >
+                          <td className="px-3 sm:px-6 py-4 font-bold text-slate-800 text-sm sm:text-base leading-snug">
+                            <div className="line-clamp-2 group-hover:text-indigo-600 transition-colors break-words">
+                              {product.name}
+                            </div>
+                          </td>
+                          <td className="px-1 py-4 text-right">
+                            <div className="flex items-center justify-end">
+                              <span className={`inline-block px-2.5 py-1.5 rounded-lg font-black text-xs sm:text-sm min-w-[45px] text-center ${
+                                pendingCount > 0 ? 'bg-indigo-50 text-indigo-600 ring-1 ring-indigo-100' : 'text-slate-300'
+                              }`}>
+                                {pendingCount.toLocaleString()}
+                              </span>
+                            </div>
+                          </td>
+                          <td className="px-3 sm:px-6 py-4 text-right">
+                            <div className="flex items-center justify-end">
+                              <span className={`inline-block min-w-[65px] px-2.5 py-1.5 rounded-lg font-black text-xs sm:text-sm text-right ${
+                                product.stock <= 0 ? 'bg-red-50 text-red-600 ring-1 ring-red-100' : 
+                                product.stock < 10 ? 'bg-amber-50 text-amber-600 ring-1 ring-amber-100' : 
+                                'bg-slate-50 text-slate-900 ring-1 ring-slate-100'
+                              }`}>
+                                {product.stock.toLocaleString()}
+                              </span>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </React.Fragment>
+                ))
               )}
             </tbody>
           </table>
@@ -166,6 +189,22 @@ const ProductManager: React.FC<Props> = ({ products, setProducts, orders }) => {
               <div>
                 <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">商品名称</label>
                 <input name="name" defaultValue={editingProduct?.name} required className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all" />
+              </div>
+              <div>
+                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">
+                  大分類（カテゴリー）
+                </label>
+                <select
+                  name="category"
+                  defaultValue={editingProduct?.category || ''}
+                  required
+                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
+                >
+                  <option value="">カテゴリーを選択してください</option>
+                  {CATEGORIES.map(cat => (
+                    <option key={cat} value={cat}>{cat}</option>
+                  ))}
+                </select>
               </div>
               <div>
                 <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">現在の在庫数</label>

@@ -1,6 +1,14 @@
 
 import { Customer, Product, Order } from './types';
 
+export const CATEGORIES: string[] = [
+  '裏白',
+  'ゆずり葉',
+  'しめ縄',
+  '関西ゴンボ関係',
+  'その他・未定',
+];
+
 export const INITIAL_CUSTOMERS: Customer[] = [
   { id: 'c1', name: '田中 太郎', company: '株式会社テック', email: 'tanaka@example.com', phone: '03-1234-5678', fax: '03-1234-5679', zipCode: '150-0002', address: '東京都渋谷区渋谷' },
   { id: 'c2', name: '佐藤 花子', company: 'サトー貿易', email: 'sato@example.com', phone: '06-8765-4321', fax: '06-8765-4322', zipCode: '541-0041', address: '大阪府大阪市中央区北浜' },
@@ -17,6 +25,7 @@ export const INITIAL_CUSTOMERS: Customer[] = [
 export const INITIAL_PRODUCTS: Product[] = Array.from({ length: 30 }, (_, i) => ({
   id: `p${i + 1}`,
   name: `商品 ${i + 1}`,
+  category: CATEGORIES[i % CATEGORIES.length],
   stock: Math.floor(Math.random() * 50) + 10,
 }));
 

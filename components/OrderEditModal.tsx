@@ -1,6 +1,7 @@
 
 import React, { useState, useMemo } from 'react';
 import { Order, Customer, Product, OrderStatus, OrderItem } from '../types';
+import { CATEGORIES } from '../constants';
 import { X, Info, Trash2, AlertTriangle, MinusCircle, CheckCircle2 } from 'lucide-react';
 
 interface Props {
@@ -191,7 +192,25 @@ const OrderEditModal: React.FC<Props> = ({ isOpen, onClose, editingOrder, custom
                         className={`w-full px-2 sm:px-3 py-2 sm:py-2.5 bg-white border rounded-xl text-xs sm:text-sm font-bold focus:ring-2 focus:ring-indigo-500 outline-none transition-colors text-slate-900 ${errors.some(e => e.includes(`${idx + 1}行目の商品名`)) ? 'border-red-300' : 'border-slate-200'}`}
                       >
                         <option value="">選択</option>
-                        {products.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                        {CATEGORIES.map(cat => {
+                          const items = products.filter(p => p.category === cat);
+                          if (items.length === 0) return null;
+                          return (
+                            <optgroup key={cat} label={cat}>
+                              {items.map(p => (
+                                <option key={p.id} value={p.id}>{p.name}</option>
+                              ))}
+                            </optgroup>
+                          );
+                        })}
+                        {products.filter(p => !p.category || !CATEGORIES.includes(p.category)).length > 0 && (
+                          <optgroup label="その他・未定">
+                            {products
+                              .filter(p => !p.category || !CATEGORIES.includes(p.category))
+                              .map(p => <option key={p.id} value={p.id}>{p.name}</option>)
+                            }
+                          </optgroup>
+                        )}
                       </select>
                     </div>
                     <div className="w-12 sm:w-16">
