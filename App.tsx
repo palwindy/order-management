@@ -14,6 +14,7 @@ import {
   FileSpreadsheet,
   AlertTriangle,
   Settings,
+  List,
 } from 'lucide-react';
 import { Customer, Product, Order } from './types';
 import { INITIAL_CUSTOMERS, INITIAL_PRODUCTS, INITIAL_ORDERS, CATEGORIES, DEFAULT_CATEGORY } from './constants';
@@ -26,12 +27,13 @@ import OrderCalendar from './components/OrderCalendar';
 import OrderEditModal from './components/OrderEditModal';
 import CalendarSettings from './components/CalendarSettings';
 import * as XLSX from 'xlsx-js-style';
-import { db } from './firebase';
+import { db, rtdb } from './firebase';
 import { collection, doc, setDoc, deleteDoc, getDocs, writeBatch } from 'firebase/firestore';
+import { ref as dbRef, onValue, push } from 'firebase/database';
 import toast, { Toaster } from 'react-hot-toast';
 import { getAuth, GoogleAuthProvider, getRedirectResult, signInWithEmailAndPassword, onAuthStateChanged, signOut } from 'firebase/auth';
 
-const APP_VERSION = "Ver.1.63";
+const APP_VERSION = "Ver.1.64";
 const COMPANY_NAME = "注文管理システム";
 const ADMIN_EMAIL = "admin@chumon-kanri.com";
 
@@ -82,13 +84,53 @@ const App: React.FC = () => {
   );
   const [inputPassword, setInputPassword] = useState('');
   const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false);
+  const [showLogModal, setShowLogModal] = useState(false);
+  const [accessLogs, setAccessLogs] = useState<any[]>([]);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const getRegion = async () => {
+    try {
+      const res = await fetch('https://ipapi.co/json/');
+      const data = await res.json();
+      return `${data.region} (${data.city})`
+    } catch {
+      return "不明な地域"
+    }
+  };
+
+  const writeLog = async (name: string, action: string, status: string) => {
+    const region = await getRegion();
+    push(dbRef(rtdb, 'access_logs'), {
+      timestamp: new Date().toLocaleString('ja-JP'),
+      deviceName: name || "未登録端末",
+      region: region,
+      action: action,
+      status: status
+    });
+  };
+
+  const fetchLogs = () => {
+    onValue(dbRef(rtdb, 'access_logs'), (snapshot) => {
+      const data = snapshot.val();
+      if (data) {
+        const list = Object.values(data).reverse();
+        setAccessLogs(list as any[]);
+      }
+    });
+    setShowLogModal(true);
+  };
+
   useEffect(() => {
     const auth = getAuth();
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      setIsAuthenticated(!!user);
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      if (user) {
+        setIsAuthenticated(true);
+        const name = localStorage.getItem('chumon_device_name') || '不明な端末';
+        await writeLog(name, "ログイン", "自動ログイン");
+      } else {
+        setIsAuthenticated(false);
+      }
       setAuthLoading(false);
     });
     return () => unsubscribe();
@@ -170,8 +212,10 @@ const App: React.FC = () => {
       const auth = getAuth();
       await signInWithEmailAndPassword(auth, ADMIN_EMAIL, inputPassword);
       localStorage.setItem('chumon_device_name', deviceName);
+      await writeLog(deviceName, "ログイン", "成功");
       toast.success("認証されました");
     } catch (error) {
+      await writeLog(deviceName, "ログイン", "失敗 (誤入力)");
       toast.error("パスワードが違います");
     }
   };
@@ -709,6 +753,54 @@ const App: React.FC = () => {
 
   return (
     <div className="flex h-screen bg-slate-100 font-sans">
+      {showLogModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-white w-full max-w-2xl max-h-[80vh] rounded-3xl shadow-2xl overflow-hidden flex flex-col">
+            <div className="p-4 border-b flex justify-between items-center bg-indigo-50">
+              <h3 className="font-black text-indigo-900 flex items-center gap-2">
+                <List size={20} /> アクセスログ (最新)
+              </h3>
+              <button onClick={() => setShowLogModal(false)}>
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="overflow-y-auto p-2">
+              <table className="w-full text-xs text-left">
+                <thead className="bg-slate-100 sticky top-0">
+                  <tr>
+                    <th className="p-2">日時</th>
+                    <th className="p-2">端末名</th>
+                    <th className="p-2">内容</th>
+                    <th className="p-2">地域</th>
+                    <th className="p-2">結果</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {accessLogs.map((log: any, i: number) => (
+                    <tr key={i} className="border-b">
+                      <td className="p-2">{log.timestamp}</td>
+                      <td className="p-2 font-bold">{log.deviceName}</td>
+                      <td className="p-2 font-medium text-slate-600">{log.action}</td>
+                      <td className="p-2 text-slate-500">{log.region}</td>
+                      <td className="p-2">
+                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                          log.status.includes('失敗')
+                            ? 'bg-red-100 text-red-600'
+                            : log.status === '自動ログイン'
+                            ? 'bg-indigo-100 text-indigo-600'
+                            : 'bg-green-100 text-green-600'
+                        }`}>
+                          {log.status}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
       {isLogoutModalOpen && (
         <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-md flex items-center justify-center z-[110] p-4">
           <div className="bg-white rounded-[32px] w-full max-w-sm shadow-2xl p-8 text-center animate-in zoom-in-95 duration-200">
@@ -773,6 +865,13 @@ const App: React.FC = () => {
              <Download className="w-5 h-5 mr-3" />
              <span>Excel出力</span>
            </button>
+           <button
+              onClick={fetchLogs}
+              className="w-full flex items-center px-3 py-2.5 text-sm font-medium rounded-md text-indigo-200 hover:bg-indigo-500"
+            >
+              <List className="w-5 h-5 mr-3" />
+              <span>アクセスログ</span>
+            </button>
            <button
              onClick={requestLogout}
              className="w-full flex items-center px-3 py-2.5 text-sm font-medium rounded-md text-red-200 hover:bg-red-500/30"
