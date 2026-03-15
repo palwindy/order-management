@@ -27,13 +27,12 @@ import OrderCalendar from './components/OrderCalendar';
 import OrderEditModal from './components/OrderEditModal';
 import CalendarSettings from './components/CalendarSettings';
 import * as XLSX from 'xlsx-js-style';
-import { db, rtdb } from './firebase';
-import { collection, doc, setDoc, deleteDoc, getDocs, writeBatch } from 'firebase/firestore';
-import { ref as dbRef, onValue, push } from 'firebase/database';
+import { db } from './firebase';
+import { collection, doc, setDoc, deleteDoc, getDocs, writeBatch, addDoc, query, orderBy, onSnapshot } from 'firebase/firestore';
 import toast, { Toaster } from 'react-hot-toast';
 import { getAuth, GoogleAuthProvider, getRedirectResult, signInWithEmailAndPassword, onAuthStateChanged, signOut } from 'firebase/auth';
 
-const APP_VERSION = "Ver.1.64";
+const APP_VERSION = "Ver.1.65";
 const COMPANY_NAME = "注文管理システム";
 const ADMIN_EMAIL = "admin@chumon-kanri.com";
 
@@ -101,22 +100,27 @@ const App: React.FC = () => {
 
   const writeLog = async (name: string, action: string, status: string) => {
     const region = await getRegion();
-    push(dbRef(rtdb, 'access_logs'), {
-      timestamp: new Date().toLocaleString('ja-JP'),
-      deviceName: name || "未登録端末",
-      region: region,
-      action: action,
-      status: status
-    });
+    try {
+      await addDoc(collection(db, 'access_logs'), {
+        timestamp: new Date(),
+        deviceName: name || "未登録端末",
+        region: region,
+        action: action,
+        status: status
+      });
+    } catch (error) {
+      console.error("Error writing log to Firestore: ", error);
+    }
   };
 
   const fetchLogs = () => {
-    onValue(dbRef(rtdb, 'access_logs'), (snapshot) => {
-      const data = snapshot.val();
-      if (data) {
-        const list = Object.values(data).reverse();
-        setAccessLogs(list as any[]);
-      }
+    const q = query(collection(db, 'access_logs'), orderBy('timestamp', 'desc'));
+    onSnapshot(q, (snapshot) => {
+      const logs = snapshot.docs.map(doc => ({
+        ...doc.data(),
+        timestamp: doc.data().timestamp.toDate().toLocaleString('ja-JP')
+      }));
+      setAccessLogs(logs);
     });
     setShowLogModal(true);
   };
