@@ -1,100 +1,47 @@
 import React, { useState, useEffect } from 'react';
 import { X, Calendar, CheckCircle2, AlertTriangle, Loader2, UserCircle } from 'lucide-react';
+import { getAuth, GoogleAuthProvider, signInWithRedirect } from 'firebase/auth';
 
-const GOOGLE_CLIENT_ID = '257303131550-fce8qek7jjcthr5muu482jvdgrhotsfs.apps.googleusercontent.com';
-const GOOGLE_SCOPES = 'https://www.googleapis.com/auth/calendar.events';
-
-// モジュールレベル変数
-let _tokenClient: any = null;
-let _gisLoaded = false;
-
-const loadGIS = (): Promise<void> => {
-  return new Promise((resolve) => {
-    if (_gisLoaded && (window as any).google?.accounts?.oauth2) {
-      resolve();
-      return;
-    }
-    if ((window as any).google?.accounts?.oauth2) {
-      _gisLoaded = true;
-      resolve();
-      return;
-    }
-    const existing = document.querySelector('script[src="https://accounts.google.com/gsi/client"]');
-    if (existing) {
-      existing.addEventListener('load', () => { _gisLoaded = true; resolve(); });
-      return;
-    }
-    const script = document.createElement('script');
-    script.src = 'https://accounts.google.com/gsi/client';
-    script.async = true;
-    script.defer = true;
-    script.onload = () => { _gisLoaded = true; resolve(); };
-    document.body.appendChild(script);
-  });
-};
+const CALENDAR_SCOPE = 'https://www.googleapis.com/auth/calendar.events';
 
 interface Props {
   isOpen: boolean;
   onClose: () => void;
+  redirectEmail?: string;  // App.tsxからリダイレクト後に渡されるメール
+  redirectToken?: string;  // App.tsxからリダイレクト後に渡されるトークン
 }
 
-const CalendarSettings: React.FC<Props> = ({ isOpen, onClose }) => {
+const CalendarSettings: React.FC<Props> = ({ isOpen, onClose, redirectEmail = '', redirectToken = '' }) => {
   const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'success' | 'error'>('idle');
   const [connectedEmail, setConnectedEmail] = useState<string>(
     localStorage.getItem('googleCalendarEmail') || ''
   );
   const [pendingEmail, setPendingEmail] = useState<string>('');
   const [pendingToken, setPendingToken] = useState<string>('');
-  const [isGISReady, setIsGISReady] = useState(!!_tokenClient);
 
+  // App.tsxからpropsでリダイレクト結果が渡されたら表示
   useEffect(() => {
-    // すでに初期化済みならスキップ（Strict Mode の2回呼び出し対策）
-    if (_tokenClient) {
-      setIsGISReady(true);
-      return;
+    if (redirectEmail) {
+      setPendingEmail(redirectEmail);
+      setPendingToken(redirectToken);
+      // localStorageの古いフラグをクリア
+      localStorage.removeItem('calendarSettingsRedirectPending');
     }
+  }, [redirectEmail, redirectToken]);
 
-    loadGIS().then(() => {
-      // 再チェック（非同期の間に別インスタンスが初期化した可能性）
-      if (_tokenClient) {
-        setIsGISReady(true);
-        return;
-      }
-
-      _tokenClient = (window as any).google.accounts.oauth2.initTokenClient({
-        client_id: GOOGLE_CLIENT_ID,
-        scope: GOOGLE_SCOPES,
-        // callbackはここでは設定しない→requestAccessToken時に渡す
-      });
-
-      setIsGISReady(true);
-    });
-  }, []);
-
-  const handleSelectAccount = () => {
-    if (!_tokenClient) return;
-
-    // requestAccessToken にコールバックを直接渡す（クロージャー問題を完全回避）
-    _tokenClient.requestAccessToken({
-      callback: async (tokenResponse: any) => {
-        if (tokenResponse.error) {
-          setSyncStatus('error');
-          return;
-        }
-        try {
-          const res = await fetch(
-            'https://www.googleapis.com/oauth2/v3/userinfo',
-            { headers: { Authorization: `Bearer ${tokenResponse.access_token}` } }
-          );
-          const userInfo = await res.json();
-          setPendingEmail(userInfo.email || '');
-          setPendingToken(tokenResponse.access_token);
-          setSyncStatus('idle');
-        } catch {
-          setSyncStatus('error');
-        }
-      }
-    });
+  const handleSelectAccount = async () => {
+    try {
+      const auth = getAuth();
+      const provider = new GoogleAuthProvider();
+      provider.addScope(CALENDAR_SCOPE);
+      provider.setCustomParameters({ prompt: 'select_account consent' });
+      localStorage.setItem('calendarSettingsRedirectPending', '1');
+      await signInWithRedirect(auth, provider);
+    } catch (error: any) {
+      console.error('エラー:', error.code, error.message);
+      setSyncStatus('error');
+      setTimeout(() => setSyncStatus('idle'), 3000);
+    }
   };
 
   const handleSave = async () => {
@@ -102,14 +49,13 @@ const CalendarSettings: React.FC<Props> = ({ isOpen, onClose }) => {
     const tokenToSave = pendingToken;
 
     if (!emailToSave) {
-      handleSelectAccount();
+      await handleSelectAccount();
       return;
     }
+
     setSyncStatus('syncing');
     try {
-      if (tokenToSave) {
-        localStorage.setItem('googleAccessToken', tokenToSave);
-      }
+      if (tokenToSave) localStorage.setItem('googleAccessToken', tokenToSave);
       localStorage.setItem('googleCalendarEmail', emailToSave);
       setConnectedEmail(emailToSave);
       setPendingEmail('');
@@ -128,7 +74,6 @@ const CalendarSettings: React.FC<Props> = ({ isOpen, onClose }) => {
     <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-[100] p-4">
       <div className="bg-white rounded-[32px] w-full max-w-md shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
 
-        {/* ヘッダー */}
         <div className="p-6 border-b border-slate-100 flex justify-between items-center">
           <div className="flex items-center gap-3">
             <div className="p-2.5 bg-indigo-600 rounded-2xl text-white shadow-lg shadow-indigo-100">
@@ -146,7 +91,6 @@ const CalendarSettings: React.FC<Props> = ({ isOpen, onClose }) => {
           </button>
         </div>
 
-        {/* 本文 */}
         <div className="p-6 space-y-5">
           <div className="bg-indigo-50 rounded-2xl p-4 text-sm text-indigo-700 font-bold leading-relaxed">
             Google カレンダーと連携すると、出荷予定を自動で Google カレンダーに登録できます。
@@ -155,7 +99,7 @@ const CalendarSettings: React.FC<Props> = ({ isOpen, onClose }) => {
           <div className="flex items-center gap-3">
             <button
               onClick={handleSelectAccount}
-              disabled={syncStatus === 'syncing' || !isGISReady}
+              disabled={syncStatus === 'syncing'}
               className="flex-1 flex items-center gap-3 px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-left hover:bg-white hover:border-indigo-300 transition-all disabled:opacity-60"
             >
               <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center flex-shrink-0">
@@ -174,7 +118,7 @@ const CalendarSettings: React.FC<Props> = ({ isOpen, onClose }) => {
                   </>
                 ) : (
                   <p className="text-sm font-bold text-slate-400">
-                    {isGISReady ? '連携するGoogleアカウントを選んでください' : '読み込み中...'}
+                    連携するGoogleアカウントを選んでください
                   </p>
                 )}
               </div>
@@ -198,6 +142,10 @@ const CalendarSettings: React.FC<Props> = ({ isOpen, onClose }) => {
                syncStatus === 'error'   ? '同期エラー' : '保存'}
             </button>
           </div>
+
+          <p className="text-[10px] text-slate-400 font-bold text-center">
+            ※ アカウント選択時はGoogleの認証ページに移動します
+          </p>
         </div>
       </div>
     </div>

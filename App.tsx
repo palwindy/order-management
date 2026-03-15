@@ -29,8 +29,9 @@ import * as XLSX from 'xlsx-js-style';
 import { db } from './firebase';
 import { collection, doc, setDoc, deleteDoc, getDocs, writeBatch } from 'firebase/firestore';
 import toast, { Toaster } from 'react-hot-toast';
+import { getAuth, GoogleAuthProvider, getRedirectResult } from 'firebase/auth';
 
-const APP_VERSION = "Ver.1.59";
+const APP_VERSION = "Ver.1.61";
 const COMPANY_NAME = "注文管理システム";
 
 // Firestoreへの差分同期ヘルパー
@@ -66,6 +67,8 @@ const App: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [isOrderModalOpen, setIsOrderModalOpen] = useState(false);
   const [isCalendarSettingsOpen, setIsCalendarSettingsOpen] = useState(false);
+  const [redirectEmail, setRedirectEmail] = useState<string>("");
+  const [redirectToken, setRedirectToken] = useState<string>("");
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
 
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -119,6 +122,27 @@ const App: React.FC = () => {
       }
     };
     loadData();
+  }, []);
+
+  useEffect(() => {
+    const auth = getAuth();
+    getRedirectResult(auth)
+      .then((result) => {
+        if (result) {
+          const credential = GoogleAuthProvider.credentialFromResult(result);
+          const token = credential?.accessToken || '';
+          const email = result.user.email || '';
+          if (email) {
+            // propsで渡すためstateに保存（localStorageは保存時のみ）
+            setRedirectEmail(email);
+            setRedirectToken(token);
+            setIsCalendarSettingsOpen(true);
+          }
+        }
+      })
+      .catch((error) => {
+        console.error('getRedirectResult エラー:', error);
+      });
   }, []);
 
   // Firestore対応セッター
@@ -727,7 +751,9 @@ const App: React.FC = () => {
 
       <CalendarSettings
         isOpen={isCalendarSettingsOpen}
-        onClose={() => setIsCalendarSettingsOpen(false)}
+        onClose={() => { setIsCalendarSettingsOpen(false); setRedirectEmail(''); setRedirectToken(''); }}
+        redirectEmail={redirectEmail}
+        redirectToken={redirectToken}
       />
 
     </div>
