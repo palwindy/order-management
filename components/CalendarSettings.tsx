@@ -7,38 +7,49 @@ const CALENDAR_SCOPE = 'https://www.googleapis.com/auth/calendar.events';
 interface Props {
   isOpen: boolean;
   onClose: () => void;
-  redirectEmail?: string;  // App.tsxからリダイレクト後に渡されるメール
-  redirectToken?: string;  // App.tsxからリダイレクト後に渡されるトークン
 }
 
-const CalendarSettings: React.FC<Props> = ({ isOpen, onClose, redirectEmail = '', redirectToken = '' }) => {
+const CalendarSettings: React.FC<Props> = ({ isOpen, onClose }) => {
   const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'success' | 'error'>('idle');
   const [connectedEmail, setConnectedEmail] = useState<string>(
     localStorage.getItem('googleCalendarEmail') || ''
   );
   const [pendingEmail, setPendingEmail] = useState<string>('');
   const [pendingToken, setPendingToken] = useState<string>('');
+  const [isCheckingRedirect, setIsCheckingRedirect] = useState(true);
 
-  // App.tsxからpropsでリダイレクト結果が渡されたら表示
   useEffect(() => {
-    if (redirectEmail) {
-      setPendingEmail(redirectEmail);
-      setPendingToken(redirectToken);
-      // localStorageの古いフラグをクリア
+    // App.tsx側で保存済みのメールアドレスを読み込む
+    const savedEmail = localStorage.getItem('googleCalendarEmail') || '';
+    const pendingRedirect = localStorage.getItem('calendarSettingsRedirectPending');
+    
+    if (pendingRedirect && savedEmail) {
+      // リダイレクト後の復帰：メールを表示して保存待ち状態に
+      setPendingEmail(savedEmail);
       localStorage.removeItem('calendarSettingsRedirectPending');
+    } else {
+      setConnectedEmail(savedEmail);
     }
-  }, [redirectEmail, redirectToken]);
+    setIsCheckingRedirect(false);
+  }, []);
 
   const handleSelectAccount = async () => {
     try {
       const auth = getAuth();
       const provider = new GoogleAuthProvider();
       provider.addScope(CALENDAR_SCOPE);
-      provider.setCustomParameters({ prompt: 'select_account consent' });
+      provider.setCustomParameters({
+        prompt: 'select_account consent',
+      });
+
+      // カレンダー設定モーダルを開いていたことを記憶
       localStorage.setItem('calendarSettingsRedirectPending', '1');
+
+      console.log('★ signInWithRedirect 開始');
       await signInWithRedirect(auth, provider);
+      // ↑ここでページ遷移するため以降は実行されない
     } catch (error: any) {
-      console.error('エラー:', error.code, error.message);
+      console.error('★ エラー:', error.code, error.message);
       setSyncStatus('error');
       setTimeout(() => setSyncStatus('idle'), 3000);
     }
@@ -55,8 +66,11 @@ const CalendarSettings: React.FC<Props> = ({ isOpen, onClose, redirectEmail = ''
 
     setSyncStatus('syncing');
     try {
-      if (tokenToSave) localStorage.setItem('googleAccessToken', tokenToSave);
+      if (tokenToSave) {
+        localStorage.setItem('googleAccessToken', tokenToSave);
+      }
       localStorage.setItem('googleCalendarEmail', emailToSave);
+      localStorage.removeItem('calendarSettingsRedirectPending');
       setConnectedEmail(emailToSave);
       setPendingEmail('');
       setPendingToken('');
@@ -96,10 +110,17 @@ const CalendarSettings: React.FC<Props> = ({ isOpen, onClose, redirectEmail = ''
             Google カレンダーと連携すると、出荷予定を自動で Google カレンダーに登録できます。
           </div>
 
+          {isCheckingRedirect && (
+            <div className="flex items-center gap-2 text-slate-400 text-sm font-bold">
+              <Loader2 className="w-4 h-4 animate-spin" />
+              <span>認証状態を確認中...</span>
+            </div>
+          )}
+
           <div className="flex items-center gap-3">
             <button
               onClick={handleSelectAccount}
-              disabled={syncStatus === 'syncing'}
+              disabled={syncStatus === 'syncing' || isCheckingRedirect}
               className="flex-1 flex items-center gap-3 px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-left hover:bg-white hover:border-indigo-300 transition-all disabled:opacity-60"
             >
               <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center flex-shrink-0">
@@ -126,8 +147,9 @@ const CalendarSettings: React.FC<Props> = ({ isOpen, onClose, redirectEmail = ''
 
             <button
               onClick={handleSave}
-              disabled={syncStatus === 'syncing'}
+              disabled={syncStatus === 'syncing' || isCheckingRedirect || (!pendingEmail && !connectedEmail)}
               className={`px-4 py-3 rounded-2xl text-sm font-black transition-all active:scale-95 flex-shrink-0 flex items-center gap-1.5 ${
+                (!pendingEmail && !connectedEmail) ? 'bg-slate-100 text-slate-300 cursor-not-allowed' :
                 syncStatus === 'syncing' ? 'bg-slate-200 text-slate-500 cursor-not-allowed' :
                 syncStatus === 'success' ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-100' :
                 syncStatus === 'error'   ? 'bg-red-500 text-white shadow-lg shadow-red-100' :

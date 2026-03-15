@@ -29,10 +29,11 @@ import * as XLSX from 'xlsx-js-style';
 import { db } from './firebase';
 import { collection, doc, setDoc, deleteDoc, getDocs, writeBatch } from 'firebase/firestore';
 import toast, { Toaster } from 'react-hot-toast';
-import { getAuth, GoogleAuthProvider, getRedirectResult } from 'firebase/auth';
+import { getAuth, GoogleAuthProvider, getRedirectResult, signInWithEmailAndPassword, onAuthStateChanged, signOut } from 'firebase/auth';
 
-const APP_VERSION = "Ver.1.61";
+const APP_VERSION = "Ver.1.63";
 const COMPANY_NAME = "注文管理システム";
+const ADMIN_EMAIL = "admin@chumon-kanri.com";
 
 // Firestoreへの差分同期ヘルパー
 function syncToFirestore<T extends { id: string }>(
@@ -67,8 +68,6 @@ const App: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [isOrderModalOpen, setIsOrderModalOpen] = useState(false);
   const [isCalendarSettingsOpen, setIsCalendarSettingsOpen] = useState(false);
-  const [redirectEmail, setRedirectEmail] = useState<string>("");
-  const [redirectToken, setRedirectToken] = useState<string>("");
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
 
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -76,10 +75,28 @@ const App: React.FC = () => {
   const [orders, setOrders] = useState<Order[]>([]);
   const [showShipped, setShowShipped] = useState(false);
 
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [authLoading, setAuthLoading] = useState(true);
+  const [deviceName, setDeviceName] = useState(
+    localStorage.getItem('chumon_device_name') || ''
+  );
+  const [inputPassword, setInputPassword] = useState('');
+  const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false);
+
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    const auth = getAuth();
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      setIsAuthenticated(!!user);
+      setAuthLoading(false);
+    });
+    return () => unsubscribe();
+  }, []);
 
   // 初回ロード
   useEffect(() => {
+    if (!isAuthenticated) return;
     const loadData = async () => {
       try {
         const [custSnap, prodSnap, ordSnap] = await Promise.all([
@@ -122,7 +139,7 @@ const App: React.FC = () => {
       }
     };
     loadData();
-  }, []);
+  }, [isAuthenticated]);
 
   useEffect(() => {
     const auth = getAuth();
@@ -133,9 +150,8 @@ const App: React.FC = () => {
           const token = credential?.accessToken || '';
           const email = result.user.email || '';
           if (email) {
-            // propsで渡すためstateに保存（localStorageは保存時のみ）
-            setRedirectEmail(email);
-            setRedirectToken(token);
+            if (token) localStorage.setItem('googleAccessToken', token);
+            localStorage.setItem('googleCalendarEmail', email);
             setIsCalendarSettingsOpen(true);
           }
         }
@@ -144,6 +160,31 @@ const App: React.FC = () => {
         console.error('getRedirectResult エラー:', error);
       });
   }, []);
+
+  const handleLogin = async () => {
+    if (!deviceName.trim() || !inputPassword.trim()) {
+      toast.error("端末名とパスワードを入力してください");
+      return;
+    }
+    try {
+      const auth = getAuth();
+      await signInWithEmailAndPassword(auth, ADMIN_EMAIL, inputPassword);
+      localStorage.setItem('chumon_device_name', deviceName);
+      toast.success("認証されました");
+    } catch (error) {
+      toast.error("パスワードが違います");
+    }
+  };
+
+  const requestLogout = () => setIsLogoutModalOpen(true);
+
+  const executeLogout = async () => {
+    const auth = getAuth();
+    await signOut(auth);
+    localStorage.removeItem('chumon_device_name');
+    setIsLogoutModalOpen(false);
+    toast.success("ログアウトしました。");
+  };
 
   // Firestore対応セッター
   const setCustomersFS = useCallback((updater: React.SetStateAction<Customer[]>) => {
@@ -178,7 +219,6 @@ const App: React.FC = () => {
   const handleSaveOrder = async (newOrder: Order) => {
     const prevOrder = orders.find(o => o.id === newOrder.id);
 
-    // 出荷済 → 未出荷 に戻す場合：在庫を元に戻す
     if (prevOrder?.status === 'Shipped' && newOrder.status === 'Pending') {
       const batch = writeBatch(db);
       batch.set(doc(db, 'orders', newOrder.id), newOrder);
@@ -196,17 +236,13 @@ const App: React.FC = () => {
       setOrders(prev => prev.map(o => o.id === newOrder.id ? newOrder : o));
       setProducts(updatedProducts);
 
-    // 未出荷 → 出荷済 に変更して保存する場合：在庫を減らす
     } else if (prevOrder?.status === 'Pending' && newOrder.status === 'Shipped') {
       await handleShipOrder(newOrder.id);
-      // handleShipOrder 内で保存済みのため、追加の setOrders は不要
 
-    // ステータス変更なし（通常の編集保存）
     } else {
       setOrdersFS(prev => prev.map(o => o.id === newOrder.id ? newOrder : o));
     }
 
-    // 新規登録の場合
     if (!prevOrder) {
       setOrdersFS(prev => [newOrder, ...prev]);
     }
@@ -247,7 +283,6 @@ const App: React.FC = () => {
       }
   };
 
-  // ナビゲーション定義
   const navItems: { id: TabId; label: string; icon: React.ElementType }[] = [
     { id: 'orders',    label: '注文管理',       icon: ClipboardList },
     { id: 'calendar',  label: 'カレンダー',     icon: CalendarIcon },
@@ -276,7 +311,6 @@ const App: React.FC = () => {
             'Shipped': '出荷済',
         };
 
-        // --- 注文一覧シート ---
         const headers = ['注文ID', '顧客ID', '顧客名', '注文日', '出荷日', '納品日', 'ステータス', '商品ID', '商品名', '数量', '単価', '小計'];
         const rows: any[][] = [headers];
 
@@ -306,8 +340,7 @@ const App: React.FC = () => {
                         ]);
                     } else {
                         rows.push([
-                            '', '', '', '', '', '',
-                            '',
+                            '', '', '', '', '', '', '',
                             item.productId, productName, item.quantity, item.unitPrice, subtotal
                         ]);
                     }
@@ -342,7 +375,6 @@ const App: React.FC = () => {
 
         XLSX.utils.book_append_sheet(wb, ws, '注文一覧');
 
-        // --- 顧客管理シート ---
         const customerHeaders = ['顧客ID', '会社名', '担当者', '郵便番号', '住所', '電話番号', 'FAX番号', 'メール', '備考'];
         const customerRows: any[][] = [customerHeaders];
         const sortedCustomers = sortCustomersById(customers);
@@ -385,7 +417,6 @@ const App: React.FC = () => {
         ];
         XLSX.utils.book_append_sheet(wb, wsCustomers, '顧客管理');
         
-        // --- 商品マスタシート ---
         const categoryGroups = CATEGORIES.map(cat => ({
           category: cat,
           items: products.filter(p => p.category === cat),
@@ -484,7 +515,6 @@ const App: React.FC = () => {
                 '出荷済': 'Shipped',
             };
 
-            // --- 注文一覧シート ---
             const orderSheet = workbook.Sheets['注文一覧'];
             if (orderSheet) {
                 const rows: any[][] = XLSX.utils.sheet_to_json(orderSheet, { header: 1 });
@@ -529,7 +559,6 @@ const App: React.FC = () => {
                 toast.success(`注文データを ${restoredOrders.length} 件復元しました。`);
             }
 
-            // --- 顧客マスタシート ---
             const customerSheet = workbook.Sheets['顧客管理'] ?? workbook.Sheets['顧客マスタ'];
             if (customerSheet) {
                 const customerRowData: any[][] = XLSX.utils.sheet_to_json(customerSheet, { header: 1 });
@@ -557,7 +586,6 @@ const App: React.FC = () => {
                 toast.error('「顧客管理」シートが見つかりません。シート名を確認してください。');
             }
 
-            // --- 商品マスタシート ---
             const productSheet = workbook.Sheets['商品マスタ'];
             if (productSheet) {
               const allRows: any[][] = XLSX.utils.sheet_to_json(productSheet, { header: 1 });
@@ -611,6 +639,58 @@ const App: React.FC = () => {
 
   const activeNavItem = navItems.find(item => item.id === activeTab)!;
 
+  if (authLoading) {
+    return (
+      <div className="h-screen flex items-center justify-center bg-slate-100 font-bold text-indigo-600">
+        認証確認中...
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-100 p-6">
+        <Toaster position="top-center" />
+        <div className="max-w-md w-full bg-white rounded-3xl shadow-xl p-8 text-center border border-slate-200">
+          <div className="w-12 h-12 bg-indigo-600 rounded-xl flex items-center justify-center mx-auto mb-6">
+            <FileSpreadsheet className="text-white w-7 h-7" />
+          </div>
+          <h1 className="text-2xl font-black text-slate-800 mb-6">注文管理システム</h1>
+          <div className="space-y-4 text-left">
+            <div>
+              <label className="text-xs font-bold text-slate-400 ml-2">端末名 (例: 社長スマホ)</label>
+              <input
+                type="text"
+                value={deviceName}
+                onChange={(e) => setDeviceName(e.target.value)}
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 focus:ring-2 focus:ring-indigo-500 outline-none"
+                placeholder="識別用の名前"
+              />
+            </div>
+            <div>
+              <label className="text-xs font-bold text-slate-400 ml-2">パスワード</label>
+              <input
+                type="password"
+                value={inputPassword}
+                onChange={(e) => setInputPassword(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleLogin()}
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 focus:ring-2 focus:ring-indigo-500 outline-none"
+                placeholder="パスワードを入力"
+              />
+            </div>
+            <button
+              onClick={handleLogin}
+              className="w-full bg-indigo-600 text-white font-bold py-4 rounded-xl shadow-lg hover:bg-indigo-700 transition-all active:scale-95"
+            >
+              認証して利用開始
+            </button>
+          </div>
+          <p className="mt-8 text-[10px] text-slate-300 font-mono italic">{APP_VERSION}</p>
+        </div>
+      </div>
+    );
+  }
+
   if (isLoading) {
     return (
       <div className="flex h-screen items-center justify-center bg-slate-900">
@@ -629,6 +709,30 @@ const App: React.FC = () => {
 
   return (
     <div className="flex h-screen bg-slate-100 font-sans">
+      {isLogoutModalOpen && (
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-md flex items-center justify-center z-[110] p-4">
+          <div className="bg-white rounded-[32px] w-full max-w-sm shadow-2xl p-8 text-center animate-in zoom-in-95 duration-200">
+            <h4 className="text-lg font-black text-slate-900 mb-3">ログアウトしますか？</h4>
+            <p className="text-xs text-slate-400 mb-8 font-bold">
+              ログアウトするとパスワードの再入力が必要になります。
+            </p>
+            <div className="flex flex-col gap-3">
+              <button
+                onClick={executeLogout}
+                className="w-full py-4 bg-red-600 text-white rounded-2xl font-black text-sm hover:bg-red-700 transition-all shadow-xl active:scale-95"
+              >
+                ログアウト
+              </button>
+              <button
+                onClick={() => setIsLogoutModalOpen(false)}
+                className="w-full py-4 bg-slate-100 text-slate-600 rounded-2xl font-bold text-sm hover:bg-slate-200 transition-all"
+              >
+                キャンセル
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       <Toaster position="top-center" />
       {isSidebarOpen && (
         <div
@@ -669,7 +773,10 @@ const App: React.FC = () => {
              <Download className="w-5 h-5 mr-3" />
              <span>Excel出力</span>
            </button>
-           <button className="w-full flex items-center px-3 py-2.5 text-sm font-medium rounded-md text-red-200 hover:bg-red-500/30">
+           <button
+             onClick={requestLogout}
+             className="w-full flex items-center px-3 py-2.5 text-sm font-medium rounded-md text-red-200 hover:bg-red-500/30"
+           >
              <LogOut className="w-5 h-5 mr-3" />
              <span>ログアウト</span>
            </button>
@@ -751,9 +858,7 @@ const App: React.FC = () => {
 
       <CalendarSettings
         isOpen={isCalendarSettingsOpen}
-        onClose={() => { setIsCalendarSettingsOpen(false); setRedirectEmail(''); setRedirectToken(''); }}
-        redirectEmail={redirectEmail}
-        redirectToken={redirectToken}
+        onClose={() => setIsCalendarSettingsOpen(false)}
       />
 
     </div>
