@@ -24,7 +24,12 @@ const CalendarSettings: React.FC<Props> = ({ isOpen, onClose }) => {
     }
   }, [isOpen]);
 
-  const handleSelectAccount = async () => {
+  const handleSelectAccount = async (e: React.MouseEvent<HTMLButtonElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    console.log('Starting Popup...');
+
     const auth = getAuth();
     const provider = new GoogleAuthProvider();
     provider.addScope(CALENDAR_SCOPE);
@@ -39,10 +44,8 @@ const CalendarSettings: React.FC<Props> = ({ isOpen, onClose }) => {
         setPendingToken(credential.accessToken);
       }
     } catch (error: any) {
-      console.error("Popup sign-in error:", error);
-      if (error.code !== 'auth/popup-closed-by-user') {
-        alert("連携に失敗しました: " + error.message);
-      }
+      console.dir(error);
+      alert("ポップアップエラー: " + error.code);
     }
   };
 
