@@ -30,9 +30,9 @@ import * as XLSX from 'xlsx-js-style';
 import { db } from './firebase';
 import { collection, doc, setDoc, deleteDoc, getDocs, writeBatch, addDoc, query, orderBy, onSnapshot } from 'firebase/firestore';
 import toast, { Toaster } from 'react-hot-toast';
-import { getAuth, GoogleAuthProvider, getRedirectResult, signInWithEmailAndPassword, onAuthStateChanged, signOut } from 'firebase/auth';
+import { getAuth, GoogleAuthProvider, signInWithEmailAndPassword, onAuthStateChanged, signOut } from 'firebase/auth';
 
-const APP_VERSION = "Ver.1.68";
+const APP_VERSION = "Ver.1.79";
 const COMPANY_NAME = "注文管理システム";
 const ADMIN_EMAIL = "admin@chumon-kanri.com";
 
@@ -190,33 +190,6 @@ const App: React.FC = () => {
     };
     loadData();
   }, [isAuthenticated]);
-
-  useEffect(() => {
-    const auth = getAuth();
-    getRedirectResult(auth)
-      .then((result) => {
-        if (result && localStorage.getItem('isCalendarSettingFlow') === 'true') {
-          const credential = GoogleAuthProvider.credentialFromResult(result);
-          if (credential) {
-            const token = credential.accessToken || '';
-            const email = result.user.email || '';
-            if (email) {
-              localStorage.setItem('pendingGoogleEmail', email);
-              localStorage.setItem('pendingGoogleAccessToken', token);
-            }
-          }
-        }
-      })
-      .catch((error) => {
-        console.error('getRedirectResult Error:', error);
-        toast.error('Googleアカウント情報の取得に失敗しました。');
-      })
-      .finally(() => {
-        if (localStorage.getItem('isCalendarSettingFlow') === 'true') {
-          setIsCalendarSettingsOpen(true);
-        }
-      });
-  }, []);
 
   const handleLogin = async () => {
     if (!deviceName.trim() || !inputPassword.trim()) {

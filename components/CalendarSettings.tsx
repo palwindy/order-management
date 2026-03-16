@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { X, Calendar, CheckCircle2, AlertTriangle, Loader2, UserCircle } from 'lucide-react';
-import { getAuth, GoogleAuthProvider, signInWithRedirect } from 'firebase/auth';
+import { getAuth, GoogleAuthProvider, signInWithPopup, UserCredential } from 'firebase/auth';
 
 const CALENDAR_SCOPE = 'https://www.googleapis.com/auth/calendar.events';
 
@@ -13,43 +13,51 @@ const CalendarSettings: React.FC<Props> = ({ isOpen, onClose }) => {
   const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'success' | 'error'>('idle');
   const [connectedEmail, setConnectedEmail] = useState<string>('');
   const [pendingEmail, setPendingEmail] = useState<string>('');
+  const [pendingToken, setPendingToken] = useState<string>('');
 
   useEffect(() => {
     if (isOpen) {
       const savedEmail = localStorage.getItem('googleCalendarEmail') || '';
       setConnectedEmail(savedEmail);
-      
-      const pending = localStorage.getItem('pendingGoogleEmail');
-      if (pending) {
-        setPendingEmail(pending);
-      }
+      setPendingEmail('');
+      setPendingToken('');
     }
   }, [isOpen]);
 
   const handleSelectAccount = async () => {
-    localStorage.setItem('isCalendarSettingFlow', 'true');
     const auth = getAuth();
     const provider = new GoogleAuthProvider();
     provider.addScope(CALENDAR_SCOPE);
-    provider.setCustomParameters({ prompt: 'select_account consent' });
-    await signInWithRedirect(auth, provider);
+
+    try {
+      const result: UserCredential = await signInWithPopup(auth, provider);
+      const credential = GoogleAuthProvider.credentialFromResult(result);
+      if (result.user.email) {
+        setPendingEmail(result.user.email);
+      }
+      if (credential?.accessToken) {
+        setPendingToken(credential.accessToken);
+      }
+    } catch (error: any) {
+      console.error("Popup sign-in error:", error);
+      if (error.code !== 'auth/popup-closed-by-user') {
+        alert("連携に失敗しました: " + error.message);
+      }
+    }
   };
 
   const handleSave = async () => {
-    if (!pendingEmail) return;
+    if (pendingEmail === '') return;
 
     setSyncStatus('syncing');
     try {
-      const token = localStorage.getItem('pendingGoogleAccessToken');
-      if (token) {
-        localStorage.setItem('googleAccessToken', token);
+      if (pendingToken) {
+        localStorage.setItem('googleAccessToken', pendingToken);
       }
       localStorage.setItem('googleCalendarEmail', pendingEmail);
       setConnectedEmail(pendingEmail);
       setPendingEmail('');
-      localStorage.removeItem('pendingGoogleEmail');
-      localStorage.removeItem('pendingGoogleAccessToken');
-      localStorage.removeItem('isCalendarSettingFlow');
+      setPendingToken('');
       setSyncStatus('success');
       setTimeout(() => setSyncStatus('idle'), 2000);
     } catch {
@@ -59,11 +67,8 @@ const CalendarSettings: React.FC<Props> = ({ isOpen, onClose }) => {
   };
   
   const handleClose = () => {
-    // Clean up temporary local storage items when closing the modal
-    localStorage.removeItem('pendingGoogleEmail');
-    localStorage.removeItem('pendingGoogleAccessToken');
-    localStorage.removeItem('isCalendarSettingFlow');
     setPendingEmail('');
+    setPendingToken('');
     onClose();
   }
 
@@ -105,29 +110,23 @@ const CalendarSettings: React.FC<Props> = ({ isOpen, onClose }) => {
                 <UserCircle className="w-5 h-5 text-indigo-500" />
               </div>
               <div className="min-w-0">
-                {pendingEmail ? (
-                  <>
-                    <p className="text-xs font-black text-amber-600 truncate">{pendingEmail}</p>
-                    <p className="text-[10px] text-amber-500 font-bold">未連携 - 保存してください</p>
-                  </>
-                ) : connectedEmail ? (
-                  <>
-                    <p className="text-xs font-black text-slate-700 truncate">{connectedEmail}</p>
-                    <p className="text-[10px] text-emerald-500 font-bold">連携済み</p>
-                  </>
-                ) : (
-                  <p className="text-sm font-bold text-slate-400">
-                    連携するGoogleアカウントを選んでください
+                  <p className="text-xs font-black text-slate-700 truncate">
+                    {pendingEmail || connectedEmail || "アカウントを選択してください"}
                   </p>
-                )}
+                  {pendingEmail && (
+                    <p className="text-[10px] text-orange-500 font-bold">(未連携・保存してください)</p>
+                  )}
+                  {connectedEmail && !pendingEmail && (
+                     <p className="text-[10px] text-emerald-500 font-bold">連携済み</p>
+                  )}
               </div>
             </button>
 
             <button
               onClick={handleSave}
-              disabled={!pendingEmail || syncStatus !== 'idle'}
+              disabled={pendingEmail === '' || syncStatus !== 'idle'}
               className={`px-4 py-3 rounded-2xl text-sm font-black transition-all active:scale-95 flex-shrink-0 flex items-center gap-1.5 ${
-                !pendingEmail ? 'bg-slate-100 text-slate-300 cursor-not-allowed' :
+                pendingEmail === '' ? 'bg-slate-100 text-slate-300 cursor-not-allowed' :
                 syncStatus === 'syncing' ? 'bg-slate-200 text-slate-500 cursor-not-allowed' :
                 syncStatus === 'success' ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-100' :
                 syncStatus === 'error'   ? 'bg-red-500 text-white shadow-lg shadow-red-100' :
@@ -139,12 +138,12 @@ const CalendarSettings: React.FC<Props> = ({ isOpen, onClose }) => {
               {syncStatus === 'error'   && <AlertTriangle className="w-4 h-4" />}
               {syncStatus === 'syncing' ? '同期中...' :
                syncStatus === 'success' ? '同期完了' :
-               syncStatus === 'error'   ? '同期エラー' : '保存'}
+               syncStatus === 'error'   ? '連携エラー' : '保存'}
             </button>
           </div>
 
           <p className="text-[10px] text-slate-400 font-bold text-center">
-            ※ アカウント選択時はGoogleの認証ページに移動します
+            ※ アカウント選択後、ポップアップウィンドウが開きます
           </p>
         </div>
       </div>
