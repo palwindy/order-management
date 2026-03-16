@@ -32,7 +32,7 @@ import { collection, doc, setDoc, deleteDoc, getDocs, writeBatch, addDoc, query,
 import toast, { Toaster } from 'react-hot-toast';
 import { getAuth, GoogleAuthProvider, getRedirectResult, signInWithEmailAndPassword, onAuthStateChanged, signOut } from 'firebase/auth';
 
-const APP_VERSION = "Ver.1.65";
+const APP_VERSION = "Ver.1.68";
 const COMPANY_NAME = "注文管理システム";
 const ADMIN_EMAIL = "admin@chumon-kanri.com";
 
@@ -130,10 +130,14 @@ const App: React.FC = () => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (user) {
         setIsAuthenticated(true);
-        const name = localStorage.getItem('chumon_device_name') || '不明な端末';
-        await writeLog(name, "ログイン", "自動ログイン");
+        if (!sessionStorage.getItem('autoLoginLogged')) {
+            const name = localStorage.getItem('chumon_device_name') || '不明な端末';
+            await writeLog(name, "ログイン", "自動ログイン");
+            sessionStorage.setItem('autoLoginLogged', 'true');
+        }
       } else {
         setIsAuthenticated(false);
+        sessionStorage.removeItem('autoLoginLogged');
       }
       setAuthLoading(false);
     });
@@ -191,19 +195,26 @@ const App: React.FC = () => {
     const auth = getAuth();
     getRedirectResult(auth)
       .then((result) => {
-        if (result) {
+        if (result && localStorage.getItem('isCalendarSettingFlow') === 'true') {
           const credential = GoogleAuthProvider.credentialFromResult(result);
-          const token = credential?.accessToken || '';
-          const email = result.user.email || '';
-          if (email) {
-            if (token) localStorage.setItem('googleAccessToken', token);
-            localStorage.setItem('googleCalendarEmail', email);
-            setIsCalendarSettingsOpen(true);
+          if (credential) {
+            const token = credential.accessToken || '';
+            const email = result.user.email || '';
+            if (email) {
+              localStorage.setItem('pendingGoogleEmail', email);
+              localStorage.setItem('pendingGoogleAccessToken', token);
+            }
           }
         }
       })
       .catch((error) => {
-        console.error('getRedirectResult エラー:', error);
+        console.error('getRedirectResult Error:', error);
+        toast.error('Googleアカウント情報の取得に失敗しました。');
+      })
+      .finally(() => {
+        if (localStorage.getItem('isCalendarSettingFlow') === 'true') {
+          setIsCalendarSettingsOpen(true);
+        }
       });
   }, []);
 
@@ -217,6 +228,7 @@ const App: React.FC = () => {
       await signInWithEmailAndPassword(auth, ADMIN_EMAIL, inputPassword);
       localStorage.setItem('chumon_device_name', deviceName);
       await writeLog(deviceName, "ログイン", "成功");
+      sessionStorage.setItem('autoLoginLogged', 'true');
       toast.success("認証されました");
     } catch (error) {
       await writeLog(deviceName, "ログイン", "失敗 (誤入力)");
@@ -234,7 +246,6 @@ const App: React.FC = () => {
     toast.success("ログアウトしました。");
   };
 
-  // Firestore対応セッター
   const setCustomersFS = useCallback((updater: React.SetStateAction<Customer[]>) => {
     setCustomers(prev => {
       const next = typeof updater === 'function' ? updater(prev) : updater;

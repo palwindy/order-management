@@ -11,76 +11,61 @@ interface Props {
 
 const CalendarSettings: React.FC<Props> = ({ isOpen, onClose }) => {
   const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'success' | 'error'>('idle');
-  const [connectedEmail, setConnectedEmail] = useState<string>(
-    localStorage.getItem('googleCalendarEmail') || ''
-  );
+  const [connectedEmail, setConnectedEmail] = useState<string>('');
   const [pendingEmail, setPendingEmail] = useState<string>('');
-  const [pendingToken, setPendingToken] = useState<string>('');
-  const [isCheckingRedirect, setIsCheckingRedirect] = useState(true);
 
   useEffect(() => {
-    // App.tsx側で保存済みのメールアドレスを読み込む
-    const savedEmail = localStorage.getItem('googleCalendarEmail') || '';
-    const pendingRedirect = localStorage.getItem('calendarSettingsRedirectPending');
-    
-    if (pendingRedirect && savedEmail) {
-      // リダイレクト後の復帰：メールを表示して保存待ち状態に
-      setPendingEmail(savedEmail);
-      localStorage.removeItem('calendarSettingsRedirectPending');
-    } else {
+    if (isOpen) {
+      const savedEmail = localStorage.getItem('googleCalendarEmail') || '';
       setConnectedEmail(savedEmail);
+      
+      const pending = localStorage.getItem('pendingGoogleEmail');
+      if (pending) {
+        setPendingEmail(pending);
+      }
     }
-    setIsCheckingRedirect(false);
-  }, []);
+  }, [isOpen]);
 
   const handleSelectAccount = async () => {
-    try {
-      const auth = getAuth();
-      const provider = new GoogleAuthProvider();
-      provider.addScope(CALENDAR_SCOPE);
-      provider.setCustomParameters({
-        prompt: 'select_account consent',
-      });
-
-      // カレンダー設定モーダルを開いていたことを記憶
-      localStorage.setItem('calendarSettingsRedirectPending', '1');
-
-      console.log('★ signInWithRedirect 開始');
-      await signInWithRedirect(auth, provider);
-      // ↑ここでページ遷移するため以降は実行されない
-    } catch (error: any) {
-      console.error('★ エラー:', error.code, error.message);
-      setSyncStatus('error');
-      setTimeout(() => setSyncStatus('idle'), 3000);
-    }
+    localStorage.setItem('isCalendarSettingFlow', 'true');
+    const auth = getAuth();
+    const provider = new GoogleAuthProvider();
+    provider.addScope(CALENDAR_SCOPE);
+    provider.setCustomParameters({ prompt: 'select_account consent' });
+    await signInWithRedirect(auth, provider);
   };
 
   const handleSave = async () => {
-    const emailToSave = pendingEmail || connectedEmail;
-    const tokenToSave = pendingToken;
-
-    if (!emailToSave) {
-      await handleSelectAccount();
-      return;
-    }
+    if (!pendingEmail) return;
 
     setSyncStatus('syncing');
     try {
-      if (tokenToSave) {
-        localStorage.setItem('googleAccessToken', tokenToSave);
+      const token = localStorage.getItem('pendingGoogleAccessToken');
+      if (token) {
+        localStorage.setItem('googleAccessToken', token);
       }
-      localStorage.setItem('googleCalendarEmail', emailToSave);
-      localStorage.removeItem('calendarSettingsRedirectPending');
-      setConnectedEmail(emailToSave);
+      localStorage.setItem('googleCalendarEmail', pendingEmail);
+      setConnectedEmail(pendingEmail);
       setPendingEmail('');
-      setPendingToken('');
+      localStorage.removeItem('pendingGoogleEmail');
+      localStorage.removeItem('pendingGoogleAccessToken');
+      localStorage.removeItem('isCalendarSettingFlow');
       setSyncStatus('success');
-      setTimeout(() => setSyncStatus('idle'), 3000);
+      setTimeout(() => setSyncStatus('idle'), 2000);
     } catch {
       setSyncStatus('error');
       setTimeout(() => setSyncStatus('idle'), 3000);
     }
   };
+  
+  const handleClose = () => {
+    // Clean up temporary local storage items when closing the modal
+    localStorage.removeItem('pendingGoogleEmail');
+    localStorage.removeItem('pendingGoogleAccessToken');
+    localStorage.removeItem('isCalendarSettingFlow');
+    setPendingEmail('');
+    onClose();
+  }
 
   if (!isOpen) return null;
 
@@ -100,7 +85,7 @@ const CalendarSettings: React.FC<Props> = ({ isOpen, onClose }) => {
               </p>
             </div>
           </div>
-          <button onClick={onClose} className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-slate-100 text-slate-400 transition-colors">
+          <button onClick={handleClose} className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-slate-100 text-slate-400 transition-colors">
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -110,17 +95,10 @@ const CalendarSettings: React.FC<Props> = ({ isOpen, onClose }) => {
             Google カレンダーと連携すると、出荷予定を自動で Google カレンダーに登録できます。
           </div>
 
-          {isCheckingRedirect && (
-            <div className="flex items-center gap-2 text-slate-400 text-sm font-bold">
-              <Loader2 className="w-4 h-4 animate-spin" />
-              <span>認証状態を確認中...</span>
-            </div>
-          )}
-
           <div className="flex items-center gap-3">
             <button
               onClick={handleSelectAccount}
-              disabled={syncStatus === 'syncing' || isCheckingRedirect}
+              disabled={syncStatus === 'syncing'}
               className="flex-1 flex items-center gap-3 px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-left hover:bg-white hover:border-indigo-300 transition-all disabled:opacity-60"
             >
               <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center flex-shrink-0">
@@ -130,7 +108,7 @@ const CalendarSettings: React.FC<Props> = ({ isOpen, onClose }) => {
                 {pendingEmail ? (
                   <>
                     <p className="text-xs font-black text-amber-600 truncate">{pendingEmail}</p>
-                    <p className="text-[10px] text-amber-500 font-bold">未保存 ― 「保存」を押して確定</p>
+                    <p className="text-[10px] text-amber-500 font-bold">未連携 - 保存してください</p>
                   </>
                 ) : connectedEmail ? (
                   <>
@@ -147,9 +125,9 @@ const CalendarSettings: React.FC<Props> = ({ isOpen, onClose }) => {
 
             <button
               onClick={handleSave}
-              disabled={syncStatus === 'syncing' || isCheckingRedirect || (!pendingEmail && !connectedEmail)}
+              disabled={!pendingEmail || syncStatus !== 'idle'}
               className={`px-4 py-3 rounded-2xl text-sm font-black transition-all active:scale-95 flex-shrink-0 flex items-center gap-1.5 ${
-                (!pendingEmail && !connectedEmail) ? 'bg-slate-100 text-slate-300 cursor-not-allowed' :
+                !pendingEmail ? 'bg-slate-100 text-slate-300 cursor-not-allowed' :
                 syncStatus === 'syncing' ? 'bg-slate-200 text-slate-500 cursor-not-allowed' :
                 syncStatus === 'success' ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-100' :
                 syncStatus === 'error'   ? 'bg-red-500 text-white shadow-lg shadow-red-100' :
