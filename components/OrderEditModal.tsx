@@ -39,10 +39,10 @@ const OrderEditModal: React.FC<Props> = ({ isOpen, onClose, editingOrder, custom
 
   const todayStr = new Date().toISOString().split('T')[0];
   const [shippingDateVal, setShippingDateVal] = useState<string>(
-    editingOrder?.shippingDate || todayStr
+    editingOrder?.shippingDate || ''
   );
   const [deliveryDateVal, setDeliveryDateVal] = useState<string>(
-    editingOrder?.deliveryDate || todayStr
+    editingOrder?.deliveryDate || ''
   );
 
   const totalAmount = useMemo(() => {
@@ -155,7 +155,10 @@ const OrderEditModal: React.FC<Props> = ({ isOpen, onClose, editingOrder, custom
   };
 
   const selectedCustomer = customers.find(c => c.id === (editingOrder?.customerId || ''));
-  const isDateInvalid = status === 'Pending' && (shippingDateVal < todayStr || deliveryDateVal < todayStr);
+  const isDateInvalid =
+    status === 'Pending' &&
+    ((shippingDateVal !== '' && shippingDateVal < todayStr) ||
+     (deliveryDateVal !== '' && deliveryDateVal < todayStr));
 
   return (
     <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-[100] p-4 overflow-y-auto" onClick={() => openSelectorIdx !== null && setOpenSelectorIdx(null)}>

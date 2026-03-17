@@ -29,7 +29,16 @@ const OrderManager: React.FC<Props> = ({ orders, setOrders, customers, products,
         const searchStr = `${cust?.name} ${cust?.company}`.toLowerCase();
         return searchStr.includes(searchTerm.toLowerCase());
       })
-      .sort((a, b) => new Date(a.shippingDate).getTime() - new Date(b.shippingDate).getTime());
+      .sort((a, b) => {
+        const aMissing = !a.shippingDate || !a.deliveryDate;
+        const bMissing = !b.shippingDate || !b.deliveryDate;
+        if (aMissing && bMissing) return 0;
+        if (aMissing) return 1;
+        if (bMissing) return -1;
+        const byShip = a.shippingDate.localeCompare(b.shippingDate);
+        if (byShip !== 0) return byShip;
+        return a.orderDate.localeCompare(b.orderDate);
+      });
   }, [orders, showShipped, searchTerm, customers]);
 
   const handleConfirmShip = () => {
@@ -85,6 +94,7 @@ const OrderManager: React.FC<Props> = ({ orders, setOrders, customers, products,
                   const firstItem = order.items[0];
                   const firstProduct = products.find(p => p.id === firstItem?.productId);
                   const isTodayShipment = order.shippingDate === todayStr && order.status === 'Pending';
+                  const isDateUndecided = order.status === 'Pending' && (!order.shippingDate || !order.deliveryDate);
                   
                   return (
                     <tr 
@@ -93,18 +103,23 @@ const OrderManager: React.FC<Props> = ({ orders, setOrders, customers, products,
                       className={`transition-all group cursor-pointer border-l-4 ${
                         isTodayShipment 
                           ? 'bg-rose-50/60 border-l-rose-500 hover:bg-rose-100/80' 
-                          : `border-l-transparent hover:border-l-indigo-400 ${showShipped ? 'hover:bg-slate-200/50' : 'hover:bg-indigo-50/40'}`
+                          : isDateUndecided
+                            ? `bg-amber-50/60 border-l-amber-400 hover:bg-amber-100/70 ${showShipped ? 'hover:bg-amber-100/70' : ''}`
+                            : `border-l-transparent hover:border-l-indigo-400 ${showShipped ? 'hover:bg-slate-200/50' : 'hover:bg-indigo-50/40'}`
                       }`}
                     >
                       <td className="px-6 py-5">
                         <div className={`text-xs font-black flex items-center gap-1.5 ${isTodayShipment ? 'text-rose-600' : 'text-slate-700'}`}>
                           <Truck className={`w-3.5 h-3.5 ${isTodayShipment ? 'text-rose-500 animate-pulse' : 'text-indigo-400'}`} />
-                          {order.shippingDate}
+                          {order.shippingDate || '未定'}
                           {isTodayShipment && <span className="text-[9px] bg-rose-600 text-white px-1.5 rounded-full ml-1">本日</span>}
+                          {isDateUndecided && !isTodayShipment && (
+                            <span className="text-[9px] bg-amber-500 text-white px-1.5 rounded-full ml-1">日付未定</span>
+                          )}
                         </div>
                       </td>
                       <td className="px-6 py-5">
-                        <div className="text-xs font-bold text-slate-400 flex items-center gap-1.5"><div className="w-1.5 h-1.5 bg-slate-300 rounded-full" />{order.deliveryDate}</div>
+                        <div className="text-xs font-bold text-slate-400 flex items-center gap-1.5"><div className="w-1.5 h-1.5 bg-slate-300 rounded-full" />{order.deliveryDate || '未定'}</div>
                       </td>
                       <td className="px-6 py-5">
                         <div className="font-black text-slate-900 leading-tight mb-0.5 group-hover:text-indigo-700 transition-colors">{customer?.company}</div>
@@ -164,6 +179,7 @@ const OrderManager: React.FC<Props> = ({ orders, setOrders, customers, products,
             const firstItem = order.items[0];
             const firstProduct = products.find(p => p.id === firstItem?.productId);
             const isTodayShipment = order.shippingDate === todayStr && order.status === 'Pending';
+            const isDateUndecided = order.status === 'Pending' && (!order.shippingDate || !order.deliveryDate);
 
             return (
               <div
@@ -172,21 +188,26 @@ const OrderManager: React.FC<Props> = ({ orders, setOrders, customers, products,
                 className={`bg-white rounded-2xl border shadow-sm p-4 cursor-pointer border-l-4 transition-all active:scale-[0.98] ${
                   isTodayShipment
                     ? 'bg-rose-50/60 border-l-rose-500'
-                    : 'border-l-transparent'
+                    : isDateUndecided
+                      ? 'bg-amber-50/60 border-l-amber-400'
+                      : 'border-l-transparent'
                 }`}
               >
                 <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center gap-3">
                     <div className={`text-xs font-black flex items-center gap-1 ${isTodayShipment ? 'text-rose-600' : 'text-slate-700'}`}>
                       <Truck className={`w-3.5 h-3.5 ${isTodayShipment ? 'text-rose-500 animate-pulse' : 'text-indigo-400'}`} />
-                      {order.shippingDate}
+                      {order.shippingDate || '未定'}
                       {isTodayShipment && (
                         <span className="text-[9px] bg-rose-600 text-white px-1.5 rounded-full ml-1">本日</span>
+                      )}
+                      {isDateUndecided && !isTodayShipment && (
+                        <span className="text-[9px] bg-amber-500 text-white px-1.5 rounded-full ml-1">日付未定</span>
                       )}
                     </div>
                     <div className="text-xs font-bold text-slate-400 flex items-center gap-1">
                       <div className="w-1.5 h-1.5 bg-slate-300 rounded-full" />
-                      {order.deliveryDate}
+                      {order.deliveryDate || '未定'}
                     </div>
                   </div>
                   {order.status === 'Pending' ? (

@@ -30,7 +30,7 @@ const OrderCalendar: React.FC<Props> = ({ orders, customers, products, onEditOrd
   // カレンダーの表示基準を出荷日に変更
   const selectedDayOrders = useMemo(() => {
     if (!selectedDay) return [];
-    return orders.filter(o => isSameDay(new Date(o.shippingDate), selectedDay));
+    return orders.filter(o => o.shippingDate && isSameDay(new Date(o.shippingDate), selectedDay));
   }, [selectedDay, orders]);
 
   return (
@@ -72,7 +72,7 @@ const OrderCalendar: React.FC<Props> = ({ orders, customers, products, onEditOrd
 
         {days.map(day => {
           // 出荷日基準で集計
-          const dayOrders = orders.filter(o => isSameDay(new Date(o.shippingDate), day));
+          const dayOrders = orders.filter(o => o.shippingDate && isSameDay(new Date(o.shippingDate), day));
           const isToday = isSameDay(day, new Date());
           
           return (
