@@ -35,6 +35,15 @@ const CalendarSettings: React.FC<Props> = ({ isOpen, onClose, orders, customers,
       setConnectedEmail(savedEmail);
       setPendingEmail('');
       setPendingToken('');
+
+      const auth = getAuth();
+      const user = auth.currentUser;
+      const linkedEmail =
+        user?.providerData.find(p => p.providerId === 'google.com')?.email || '';
+      if (linkedEmail) {
+        setConnectedEmail(linkedEmail);
+        setPendingEmail(linkedEmail);
+      }
     }
   }, [isOpen]);
 
@@ -48,7 +57,12 @@ const CalendarSettings: React.FC<Props> = ({ isOpen, onClose, orders, customers,
         const result = await getRedirectResult(auth);
         sessionStorage.removeItem('calendar_oauth_redirect');
 
-        if (!result) return;
+        if (!result) {
+          const linkedEmail =
+            auth.currentUser?.providerData.find(p => p.providerId === 'google.com')?.email || '';
+          if (linkedEmail) setPendingEmail(linkedEmail);
+          return;
+        }
 
         const credential = GoogleAuthProvider.credentialFromResult(result);
         const googleEmail =
