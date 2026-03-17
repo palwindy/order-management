@@ -45,6 +45,9 @@ const OrderEditModal: React.FC<Props> = ({ isOpen, onClose, editingOrder, custom
     editingOrder?.deliveryDate || ''
   );
 
+  const shippingDateMode = shippingDateVal === '' ? 'undecided' : 'date';
+  const deliveryDateMode = deliveryDateVal === '' ? 'undecided' : 'date';
+
   const totalAmount = useMemo(() => {
     return tempItems.reduce((sum, item) => {
       const price = parseFloat(item.unitPrice) || 0;
@@ -304,9 +307,23 @@ const OrderEditModal: React.FC<Props> = ({ isOpen, onClose, editingOrder, custom
                   onKeyDown={handleKeyDown}
                   value={shippingDateVal}
                   onChange={(e) => setShippingDateVal(e.target.value)}
-                  required 
                   className="w-full px-4 sm:px-5 py-3 sm:py-4 bg-slate-50 border border-slate-100 rounded-2xl text-sm sm:text-base font-bold focus:ring-4 focus:ring-indigo-500/10 outline-none transition-all hover:bg-slate-100 text-slate-900" 
                 />
+                <select
+                  value={shippingDateMode}
+                  onChange={(e) => {
+                    const next = e.target.value;
+                    if (next === 'undecided') {
+                      setShippingDateVal('');
+                    } else if (shippingDateVal === '') {
+                      setShippingDateVal(todayStr);
+                    }
+                  }}
+                  className="mt-2 w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-600"
+                >
+                  <option value="date">日付指定</option>
+                  <option value="undecided">出荷日未定</option>
+                </select>
               </div>
               <div>
                 <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-3">納品日</label>
@@ -316,9 +333,23 @@ const OrderEditModal: React.FC<Props> = ({ isOpen, onClose, editingOrder, custom
                   onKeyDown={handleKeyDown}
                   value={deliveryDateVal}
                   onChange={(e) => setDeliveryDateVal(e.target.value)}
-                  required 
                   className="w-full px-4 sm:px-5 py-3 sm:py-4 bg-slate-50 border border-slate-100 rounded-2xl text-sm sm:text-base font-bold focus:ring-4 focus:ring-indigo-500/10 outline-none transition-all hover:bg-slate-100 text-slate-900" 
                 />
+                <select
+                  value={deliveryDateMode}
+                  onChange={(e) => {
+                    const next = e.target.value;
+                    if (next === 'undecided') {
+                      setDeliveryDateVal('');
+                    } else if (deliveryDateVal === '') {
+                      setDeliveryDateVal(todayStr);
+                    }
+                  }}
+                  className="mt-2 w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-600"
+                >
+                  <option value="date">日付指定</option>
+                  <option value="undecided">納品日未定</option>
+                </select>
               </div>
             </div>
 

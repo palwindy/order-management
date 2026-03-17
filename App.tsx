@@ -32,7 +32,7 @@ import { collection, doc, setDoc, deleteDoc, getDocs, writeBatch, addDoc, query,
 import toast, { Toaster } from 'react-hot-toast';
 import { getAuth, GoogleAuthProvider, signInWithEmailAndPassword, onAuthStateChanged, signOut, getRedirectResult } from 'firebase/auth';
 
-const APP_VERSION = "Ver.1.89";
+const APP_VERSION = "Ver.1.90";
 const COMPANY_NAME = "注文管理システム";
 const ADMIN_EMAIL = "admin@chumon-kanri.com";
 
