@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { Order, Customer, Product, OrderStatus } from '../types';
-import { Plus, Search, Truck } from 'lucide-react';
+import { Plus, Search, Truck, PackageCheck } from 'lucide-react';
 import { getPrefectureFromAddress } from '../utils';
 
 interface Props {
@@ -118,13 +118,16 @@ const OrderManager: React.FC<Props> = ({ orders, setOrders, customers, products,
                           {isDateUndecided && !isTodayShipment && (
                             <span className="text-[9px] bg-amber-500 text-white px-1.5 rounded-full ml-1">日付未定</span>
                           )}
+                        </div>
+                      </td>
+                      <td className="px-6 py-5">
+                        <div className="text-xs font-bold text-slate-400 flex items-center gap-1.5">
+                          <PackageCheck className="w-3.5 h-3.5 text-slate-400" />
+                          {order.deliveryDate || '未定'}
                           {prefecture && (
                             <span className="text-[9px] font-black text-slate-500 ml-1">{prefecture}</span>
                           )}
                         </div>
-                      </td>
-                      <td className="px-6 py-5">
-                        <div className="text-xs font-bold text-slate-400 flex items-center gap-1.5"><div className="w-1.5 h-1.5 bg-slate-300 rounded-full" />{order.deliveryDate || '未定'}</div>
                       </td>
                       <td className="px-6 py-5">
                         <div className="font-black text-slate-900 leading-tight mb-0.5 group-hover:text-indigo-700 transition-colors">{customer?.company}</div>
@@ -148,7 +151,7 @@ const OrderManager: React.FC<Props> = ({ orders, setOrders, customers, products,
                         {order.status === 'Pending' ? (
                           <button 
                             onClick={(e) => { e.stopPropagation(); setConfirmShipId(order.id); }}
-                            className={`mx-auto w-10 h-10 flex items-center justify-center rounded-full transition-all shadow-sm active:scale-90 group/btn ${
+                            className={`mx-auto w-12 h-12 flex flex-col items-center justify-center rounded-2xl transition-all shadow-sm active:scale-90 group/btn ${
                               isTodayShipment 
                                 ? 'bg-rose-100 text-rose-600 hover:bg-rose-600 hover:text-white' 
                                 : 'bg-emerald-50 text-emerald-600 hover:bg-emerald-600 hover:text-white'
@@ -156,10 +159,12 @@ const OrderManager: React.FC<Props> = ({ orders, setOrders, customers, products,
                             title="出荷済みにする"
                           >
                             <Truck className="w-5 h-5 group-hover/btn:scale-110 transition-transform" />
+                            <span className="text-[9px] font-black mt-0.5">未出荷</span>
                           </button>
                         ) : (
-                          <div className="mx-auto w-10 h-10 flex items-center justify-center bg-emerald-500 text-white rounded-full shadow-md">
+                          <div className="mx-auto w-12 h-12 flex flex-col items-center justify-center bg-emerald-500 text-white rounded-2xl shadow-md">
                             <Truck className="w-5 h-5" />
+                            <span className="text-[9px] font-black mt-0.5">出荷済み</span>
                           </div>
                         )}
                       </td>
@@ -210,29 +215,31 @@ const OrderManager: React.FC<Props> = ({ orders, setOrders, customers, products,
                       {isDateUndecided && !isTodayShipment && (
                         <span className="text-[9px] bg-amber-500 text-white px-1.5 rounded-full ml-1">日付未定</span>
                       )}
+                    </div>
+                    <div className="text-xs font-bold text-slate-400 flex items-center gap-1">
+                      <PackageCheck className="w-3.5 h-3.5 text-slate-400" />
+                      {order.deliveryDate || '未定'}
                       {prefecture && (
                         <span className="text-[9px] font-black text-slate-500 ml-1">{prefecture}</span>
                       )}
-                    </div>
-                    <div className="text-xs font-bold text-slate-400 flex items-center gap-1">
-                      <div className="w-1.5 h-1.5 bg-slate-300 rounded-full" />
-                      {order.deliveryDate || '未定'}
                     </div>
                   </div>
                   {order.status === 'Pending' ? (
                     <button
                       onClick={(e) => { e.stopPropagation(); setConfirmShipId(order.id); }}
-                      className={`w-9 h-9 flex items-center justify-center rounded-full transition-all shadow-sm active:scale-90 ${
+                      className={`w-12 h-12 flex flex-col items-center justify-center rounded-2xl transition-all shadow-sm active:scale-90 ${
                         isTodayShipment
                           ? 'bg-rose-100 text-rose-600 hover:bg-rose-600 hover:text-white'
                           : 'bg-emerald-50 text-emerald-600 hover:bg-emerald-600 hover:text-white'
                       }`}
                     >
                       <Truck className="w-4 h-4" />
+                      <span className="text-[9px] font-black mt-0.5">未出荷</span>
                     </button>
                   ) : (
-                    <div className="w-9 h-9 flex items-center justify-center bg-emerald-500 text-white rounded-full shadow-md">
+                    <div className="w-12 h-12 flex flex-col items-center justify-center bg-emerald-500 text-white rounded-2xl shadow-md">
                       <Truck className="w-4 h-4" />
+                      <span className="text-[9px] font-black mt-0.5">出荷済み</span>
                     </div>
                   )}
                 </div>
