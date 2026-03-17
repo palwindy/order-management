@@ -161,7 +161,7 @@ const OrderEditModal: React.FC<Props> = ({ isOpen, onClose, editingOrder, custom
       shippingDate: shippingDate,
       deliveryDate: deliveryDate,
       status: status,
-      notes: notes.trim() || undefined,
+      notes: notes.trim(),
     };
 
     onSave(newOrder);
