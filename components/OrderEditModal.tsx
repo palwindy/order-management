@@ -89,9 +89,7 @@ const OrderEditModal: React.FC<Props> = ({ isOpen, onClose, editingOrder, custom
   if (!isOpen) return null;
 
   const addItem = () => {
-    if (tempItems.length < 10) {
-      setTempItems([...tempItems, { productId: '', quantity: '', unitPrice: '' }]);
-    }
+    setTempItems([...tempItems, { productId: '', quantity: '', unitPrice: '' }]);
   };
 
   const removeItem = (index: number) => {
@@ -215,10 +213,8 @@ const OrderEditModal: React.FC<Props> = ({ isOpen, onClose, editingOrder, custom
 
             <div className="space-y-4">
               <div className="flex items-center justify-between">
-                <label className="text-xs font-black text-slate-400 uppercase tracking-widest">注文商品リスト (最大10件)</label>
-                {tempItems.length < 10 && (
-                  <button type="button" onClick={addItem} className="text-[10px] sm:text-xs font-black text-white bg-indigo-600 px-4 py-2 sm:px-5 sm:py-2.5 rounded-xl hover:bg-indigo-700 shadow-md transition-all active:scale-95">+ 商品を追加</button>
-                )}
+                <label className="text-xs font-black text-slate-400 uppercase tracking-widest">注文商品リスト</label>
+                <button type="button" onClick={addItem} className="text-[10px] sm:text-xs font-black text-white bg-indigo-600 px-4 py-2 sm:px-5 sm:py-2.5 rounded-xl hover:bg-indigo-700 shadow-md transition-all active:scale-95">+ 商品を追加</button>
               </div>
               <div className="space-y-3 max-h-[350px] overflow-y-auto custom-scrollbar pr-1">
                 {tempItems.map((item, idx) => (
