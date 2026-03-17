@@ -32,7 +32,7 @@ import { collection, doc, setDoc, deleteDoc, getDocs, writeBatch, addDoc, query,
 import toast, { Toaster } from 'react-hot-toast';
 import { getAuth, GoogleAuthProvider, signInWithEmailAndPassword, onAuthStateChanged, signOut, getRedirectResult } from 'firebase/auth';
 
-const APP_VERSION = "Ver.1.86";
+const APP_VERSION = "Ver.1.87";
 const COMPANY_NAME = "注文管理システム";
 const ADMIN_EMAIL = "admin@chumon-kanri.com";
 
@@ -160,7 +160,21 @@ const App: React.FC = () => {
     (async () => {
       try {
         const result = await getRedirectResult(auth);
-        if (!result) return;
+        if (!result) {
+          const triedRedirect = sessionStorage.getItem('calendar_oauth_redirect') === '1';
+          if (triedRedirect) {
+            const user = auth.currentUser;
+            if (user) {
+              await user.reload();
+              const linkedGoogleEmail =
+                user.providerData.find(p => p.providerId === 'google.com')?.email || '';
+              if (linkedGoogleEmail) {
+                localStorage.setItem('googleCalendarEmail', linkedGoogleEmail);
+              }
+            }
+          }
+          return;
+        }
         const credential = GoogleAuthProvider.credentialFromResult(result);
         const googleEmail =
           result.user.providerData.find(p => p.providerId === 'google.com')?.email || '';
@@ -170,6 +184,9 @@ const App: React.FC = () => {
         }
       } catch (err) {
         console.error(err);
+        if (sessionStorage.getItem('calendar_oauth_redirect') === '1') {
+          alert('Google連携の結果を取得できませんでした。認証状態を確認します。');
+        }
       }
     })();
   }, []);

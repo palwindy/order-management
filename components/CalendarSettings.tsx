@@ -47,6 +47,28 @@ const CalendarSettings: React.FC<Props> = ({ isOpen, onClose, orders, customers,
     }
   }, [isOpen]);
 
+  useEffect(() => {
+    if (!isOpen) return;
+    const auth = getAuth();
+    const user = auth.currentUser;
+    if (!user) return;
+
+    (async () => {
+      try {
+        await user.reload();
+        const linkedEmail =
+          user.providerData.find(p => p.providerId === 'google.com')?.email || '';
+        if (linkedEmail) {
+          localStorage.setItem('googleCalendarEmail', linkedEmail);
+          setConnectedEmail(linkedEmail);
+          setPendingEmail(linkedEmail);
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    })();
+  }, [isOpen]);
+
   // Handle redirect-based OAuth result (fallback for environments where popups are blocked/broken).
   useEffect(() => {
     if (!isOpen) return;
