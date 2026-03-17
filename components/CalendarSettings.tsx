@@ -1,6 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { X, Calendar, CheckCircle2, AlertTriangle, Loader2, UserCircle } from 'lucide-react';
-import { getAuth, GoogleAuthProvider, linkWithPopup, reauthenticateWithPopup, UserCredential } from 'firebase/auth';
+import {
+  getAuth,
+  GoogleAuthProvider,
+  linkWithPopup,
+  linkWithRedirect,
+  reauthenticateWithPopup,
+  reauthenticateWithRedirect,
+  getRedirectResult,
+  UserCredential,
+} from 'firebase/auth';
 import type { Customer, Order, Product } from '../types';
 import { syncShippingOrdersToGoogleCalendar } from '../googleCalendar';
 
@@ -27,6 +36,36 @@ const CalendarSettings: React.FC<Props> = ({ isOpen, onClose, orders, customers,
       setPendingEmail('');
       setPendingToken('');
     }
+  }, [isOpen]);
+
+  // Handle redirect-based OAuth result (fallback for environments where popups are blocked/broken).
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const shouldHandle = sessionStorage.getItem('calendar_oauth_redirect') === '1';
+    if (!shouldHandle) return;
+
+    const auth = getAuth();
+    (async () => {
+      try {
+        const result = await getRedirectResult(auth);
+        sessionStorage.removeItem('calendar_oauth_redirect');
+
+        if (!result) return;
+
+        const credential = GoogleAuthProvider.credentialFromResult(result);
+        const googleEmail =
+          result.user.providerData.find(p => p.providerId === 'google.com')?.email ||
+          '';
+
+        if (googleEmail) setPendingEmail(googleEmail);
+        if (credential?.accessToken) setPendingToken(credential.accessToken);
+      } catch (err: any) {
+        sessionStorage.removeItem('calendar_oauth_redirect');
+        console.error(err);
+        alert(err?.message || 'リダイレクト認証の結果取得に失敗しました。');
+      }
+    })();
   }, [isOpen]);
 
   const handleSelectAccount = async (e: React.MouseEvent<HTMLButtonElement>) => {
@@ -64,7 +103,35 @@ const CalendarSettings: React.FC<Props> = ({ isOpen, onClose, orders, customers,
       }
     } catch (error: any) {
       console.dir(error);
-      alert("ポップアップエラー: " + error.code);
+
+      // On some hosted/dev environments, popup flows fail (often reported as popup-closed-by-user).
+      // Fallback to redirect flow which is more robust.
+      const code = String(error?.code || '');
+      const shouldFallback =
+        code === 'auth/popup-closed-by-user' ||
+        code === 'auth/popup-blocked' ||
+        code === 'auth/web-storage-unsupported' ||
+        code === 'auth/operation-not-supported-in-this-environment';
+
+      if (shouldFallback) {
+        try {
+          sessionStorage.setItem('calendar_oauth_redirect', '1');
+          sessionStorage.setItem('calendar_settings_reopen', '1');
+          const isGoogleLinked = user.providerData.some(p => p.providerId === 'google.com');
+          if (isGoogleLinked) {
+            await reauthenticateWithRedirect(user, provider);
+          } else {
+            await linkWithRedirect(user, provider);
+          }
+          return;
+        } catch (redirectErr: any) {
+          console.error(redirectErr);
+          alert('ポップアップが使えず、リダイレクト連携も失敗しました。');
+          return;
+        }
+      }
+
+      alert("ポップアップエラー: " + (error?.code || 'unknown'));
     }
   };
 
