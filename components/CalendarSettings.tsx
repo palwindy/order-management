@@ -33,7 +33,7 @@ const CalendarSettings: React.FC<Props> = ({ isOpen, onClose, orders, customers,
     if (isOpen) {
       const savedEmail = localStorage.getItem('googleCalendarEmail') || '';
       setConnectedEmail(savedEmail);
-      setPendingEmail('');
+      setPendingEmail(savedEmail);
       setPendingToken('');
 
       const auth = getAuth();

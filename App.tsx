@@ -30,9 +30,9 @@ import * as XLSX from 'xlsx-js-style';
 import { db } from './firebase';
 import { collection, doc, setDoc, deleteDoc, getDocs, writeBatch, addDoc, query, orderBy, onSnapshot } from 'firebase/firestore';
 import toast, { Toaster } from 'react-hot-toast';
-import { getAuth, GoogleAuthProvider, signInWithEmailAndPassword, onAuthStateChanged, signOut } from 'firebase/auth';
+import { getAuth, GoogleAuthProvider, signInWithEmailAndPassword, onAuthStateChanged, signOut, getRedirectResult } from 'firebase/auth';
 
-const APP_VERSION = "Ver.1.84";
+const APP_VERSION = "Ver.1.85";
 const COMPANY_NAME = "注文管理システム";
 const ADMIN_EMAIL = "admin@chumon-kanri.com";
 
@@ -142,6 +142,26 @@ const App: React.FC = () => {
       setAuthLoading(false);
     });
     return () => unsubscribe();
+  }, []);
+
+  // Capture OAuth redirect result globally (Google Calendar linking).
+  useEffect(() => {
+    const auth = getAuth();
+    (async () => {
+      try {
+        const result = await getRedirectResult(auth);
+        if (!result) return;
+        const credential = GoogleAuthProvider.credentialFromResult(result);
+        const googleEmail =
+          result.user.providerData.find(p => p.providerId === 'google.com')?.email || '';
+        if (googleEmail) localStorage.setItem('googleCalendarEmail', googleEmail);
+        if (credential?.accessToken) {
+          localStorage.setItem('googleAccessToken', credential.accessToken);
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    })();
   }, []);
 
   // After OAuth redirect (Google Calendar linking), reopen the settings modal automatically.
