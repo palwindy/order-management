@@ -32,7 +32,7 @@ import { collection, doc, setDoc, deleteDoc, getDocs, writeBatch, addDoc, query,
 import toast, { Toaster } from 'react-hot-toast';
 import { getAuth, GoogleAuthProvider, signInWithEmailAndPassword, onAuthStateChanged, signOut, getRedirectResult } from 'firebase/auth';
 
-const APP_VERSION = "Ver.1.87";
+const APP_VERSION = "Ver.1.88";
 const COMPANY_NAME = "注文管理システム";
 const ADMIN_EMAIL = "admin@chumon-kanri.com";
 
@@ -189,6 +189,40 @@ const App: React.FC = () => {
         }
       }
     })();
+  }, []);
+
+  // After redirect, providerData may lag. Retry a few times to pick up linked Google email.
+  useEffect(() => {
+    const triedRedirect = sessionStorage.getItem('calendar_oauth_redirect') === '1';
+    if (!triedRedirect) return;
+
+    const auth = getAuth();
+    let attempts = 0;
+    const maxAttempts = 6;
+
+    const tick = async () => {
+      attempts += 1;
+      const user = auth.currentUser;
+      if (user) {
+        try {
+          await user.reload();
+          const linkedGoogleEmail =
+            user.providerData.find(p => p.providerId === 'google.com')?.email || '';
+          if (linkedGoogleEmail) {
+            localStorage.setItem('googleCalendarEmail', linkedGoogleEmail);
+            sessionStorage.removeItem('calendar_oauth_redirect');
+            return;
+          }
+        } catch (err) {
+          console.error(err);
+        }
+      }
+      if (attempts < maxAttempts) {
+        setTimeout(tick, 700);
+      }
+    };
+
+    setTimeout(tick, 300);
   }, []);
 
   // After OAuth redirect (Google Calendar linking), reopen the settings modal automatically.
