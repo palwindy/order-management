@@ -32,7 +32,7 @@ import { collection, doc, setDoc, deleteDoc, getDocs, writeBatch, addDoc, query,
 import toast, { Toaster } from 'react-hot-toast';
 import { getAuth, GoogleAuthProvider, signInWithEmailAndPassword, onAuthStateChanged, signOut, getRedirectResult } from 'firebase/auth';
 
-const APP_VERSION = "Ver.1.85";
+const APP_VERSION = "Ver.1.86";
 const COMPANY_NAME = "注文管理システム";
 const ADMIN_EMAIL = "admin@chumon-kanri.com";
 
@@ -130,6 +130,16 @@ const App: React.FC = () => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (user) {
         setIsAuthenticated(true);
+        try {
+          await user.reload();
+          const linkedGoogleEmail =
+            user.providerData.find(p => p.providerId === 'google.com')?.email || '';
+          if (linkedGoogleEmail) {
+            localStorage.setItem('googleCalendarEmail', linkedGoogleEmail);
+          }
+        } catch (err) {
+          console.error(err);
+        }
         if (!sessionStorage.getItem('autoLoginLogged')) {
             const name = localStorage.getItem('chumon_device_name') || '不明な端末';
             await writeLog(name, "ログイン", "自動ログイン");
