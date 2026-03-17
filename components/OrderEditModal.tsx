@@ -1,7 +1,7 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
 import { Order, Customer, Product, OrderStatus, OrderItem } from '../types';
 import { CATEGORIES } from '../constants';
-import { X, Info, Trash2, AlertTriangle, MinusCircle, CheckCircle2 } from 'lucide-react';
+import { X, Info, Trash2, AlertTriangle, MinusCircle, CheckCircle2, Calendar } from 'lucide-react';
 import { sortCustomersById } from '../utils';
 
 interface Props {
@@ -45,8 +45,18 @@ const OrderEditModal: React.FC<Props> = ({ isOpen, onClose, editingOrder, custom
     editingOrder?.deliveryDate || ''
   );
 
-  const shippingDateMode = shippingDateVal === '' ? 'undecided' : 'date';
-  const deliveryDateMode = deliveryDateVal === '' ? 'undecided' : 'date';
+  const shippingDateInputRef = useRef<HTMLInputElement>(null);
+  const deliveryDateInputRef = useRef<HTMLInputElement>(null);
+
+  const openDatePicker = (ref: React.RefObject<HTMLInputElement>) => {
+    const input = ref.current;
+    if (!input) return;
+    if (typeof input.showPicker === 'function') {
+      input.showPicker();
+    } else {
+      input.click();
+    }
+  };
 
   const totalAmount = useMemo(() => {
     return tempItems.reduce((sum, item) => {
@@ -301,55 +311,81 @@ const OrderEditModal: React.FC<Props> = ({ isOpen, onClose, editingOrder, custom
             <div className="grid grid-cols-2 gap-4 sm:gap-6">
               <div>
                 <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-3">出荷日</label>
-                <input 
-                  name="shippingDate" 
-                  type="date" 
-                  onKeyDown={handleKeyDown}
-                  value={shippingDateVal}
-                  onChange={(e) => setShippingDateVal(e.target.value)}
-                  className="w-full px-4 sm:px-5 py-3 sm:py-4 bg-slate-50 border border-slate-100 rounded-2xl text-sm sm:text-base font-bold focus:ring-4 focus:ring-indigo-500/10 outline-none transition-all hover:bg-slate-100 text-slate-900" 
-                />
-                <select
-                  value={shippingDateMode}
-                  onChange={(e) => {
-                    const next = e.target.value;
-                    if (next === 'undecided') {
-                      setShippingDateVal('');
-                    } else if (shippingDateVal === '') {
-                      setShippingDateVal(todayStr);
-                    }
-                  }}
-                  className="mt-2 w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-600"
-                >
-                  <option value="date">日付指定</option>
-                  <option value="undecided">出荷日未定</option>
-                </select>
+                <div className="flex gap-2">
+                  <select
+                    value={shippingDateVal === '' ? '__undecided' : shippingDateVal}
+                    onChange={(e) => {
+                      const next = e.target.value;
+                      if (next === '__undecided') {
+                        setShippingDateVal('');
+                      } else {
+                        setShippingDateVal(next);
+                      }
+                    }}
+                    className="flex-1 px-4 sm:px-5 py-3 sm:py-4 bg-slate-50 border border-slate-100 rounded-2xl text-sm sm:text-base font-bold focus:ring-4 focus:ring-indigo-500/10 outline-none transition-all hover:bg-slate-100 text-slate-900"
+                  >
+                    <option value="__undecided">出荷日未定</option>
+                    {shippingDateVal !== '' && (
+                      <option value={shippingDateVal}>{shippingDateVal}</option>
+                    )}
+                  </select>
+                  <button
+                    type="button"
+                    onClick={() => openDatePicker(shippingDateInputRef)}
+                    className="px-3 sm:px-4 py-3 sm:py-4 bg-white border border-slate-200 rounded-2xl text-xs sm:text-sm font-black text-slate-600 hover:bg-slate-50 transition-all flex items-center gap-2"
+                  >
+                    <Calendar className="w-4 h-4" />
+                    日付選択
+                  </button>
+                  <input
+                    ref={shippingDateInputRef}
+                    name="shippingDate"
+                    type="date"
+                    onKeyDown={handleKeyDown}
+                    value={shippingDateVal}
+                    onChange={(e) => setShippingDateVal(e.target.value)}
+                    className="sr-only"
+                  />
+                </div>
               </div>
               <div>
                 <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-3">納品日</label>
-                <input 
-                  name="deliveryDate" 
-                  type="date" 
-                  onKeyDown={handleKeyDown}
-                  value={deliveryDateVal}
-                  onChange={(e) => setDeliveryDateVal(e.target.value)}
-                  className="w-full px-4 sm:px-5 py-3 sm:py-4 bg-slate-50 border border-slate-100 rounded-2xl text-sm sm:text-base font-bold focus:ring-4 focus:ring-indigo-500/10 outline-none transition-all hover:bg-slate-100 text-slate-900" 
-                />
-                <select
-                  value={deliveryDateMode}
-                  onChange={(e) => {
-                    const next = e.target.value;
-                    if (next === 'undecided') {
-                      setDeliveryDateVal('');
-                    } else if (deliveryDateVal === '') {
-                      setDeliveryDateVal(todayStr);
-                    }
-                  }}
-                  className="mt-2 w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-600"
-                >
-                  <option value="date">日付指定</option>
-                  <option value="undecided">納品日未定</option>
-                </select>
+                <div className="flex gap-2">
+                  <select
+                    value={deliveryDateVal === '' ? '__undecided' : deliveryDateVal}
+                    onChange={(e) => {
+                      const next = e.target.value;
+                      if (next === '__undecided') {
+                        setDeliveryDateVal('');
+                      } else {
+                        setDeliveryDateVal(next);
+                      }
+                    }}
+                    className="flex-1 px-4 sm:px-5 py-3 sm:py-4 bg-slate-50 border border-slate-100 rounded-2xl text-sm sm:text-base font-bold focus:ring-4 focus:ring-indigo-500/10 outline-none transition-all hover:bg-slate-100 text-slate-900"
+                  >
+                    <option value="__undecided">納品日未定</option>
+                    {deliveryDateVal !== '' && (
+                      <option value={deliveryDateVal}>{deliveryDateVal}</option>
+                    )}
+                  </select>
+                  <button
+                    type="button"
+                    onClick={() => openDatePicker(deliveryDateInputRef)}
+                    className="px-3 sm:px-4 py-3 sm:py-4 bg-white border border-slate-200 rounded-2xl text-xs sm:text-sm font-black text-slate-600 hover:bg-slate-50 transition-all flex items-center gap-2"
+                  >
+                    <Calendar className="w-4 h-4" />
+                    日付選択
+                  </button>
+                  <input
+                    ref={deliveryDateInputRef}
+                    name="deliveryDate"
+                    type="date"
+                    onKeyDown={handleKeyDown}
+                    value={deliveryDateVal}
+                    onChange={(e) => setDeliveryDateVal(e.target.value)}
+                    className="sr-only"
+                  />
+                </div>
               </div>
             </div>
 
