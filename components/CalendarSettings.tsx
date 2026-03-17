@@ -42,9 +42,6 @@ const CalendarSettings: React.FC<Props> = ({ isOpen, onClose, orders, customers,
   useEffect(() => {
     if (!isOpen) return;
 
-    const shouldHandle = sessionStorage.getItem('calendar_oauth_redirect') === '1';
-    if (!shouldHandle) return;
-
     const auth = getAuth();
     (async () => {
       try {
@@ -60,6 +57,14 @@ const CalendarSettings: React.FC<Props> = ({ isOpen, onClose, orders, customers,
 
         if (googleEmail) setPendingEmail(googleEmail);
         if (credential?.accessToken) setPendingToken(credential.accessToken);
+
+        // If linking succeeded but we didn't receive an access token, still show the selected account.
+        if (!credential?.accessToken) {
+          const emailFromUser =
+            auth.currentUser?.providerData.find(p => p.providerId === 'google.com')?.email ||
+            '';
+          if (emailFromUser) setPendingEmail(emailFromUser);
+        }
       } catch (err: any) {
         sessionStorage.removeItem('calendar_oauth_redirect');
         console.error(err);
@@ -85,9 +90,30 @@ const CalendarSettings: React.FC<Props> = ({ isOpen, onClose, orders, customers,
     provider.addScope(CALENDAR_SCOPE);
 
     try {
+      // Firebase Studio / Cloud Workstations preview often breaks popup flows.
+      // Use redirect by default there to avoid "popup + main window" double prompts.
+      const host = window.location.hostname;
+      const preferRedirect =
+        localStorage.getItem('calendar_oauth_flow') === 'redirect' ||
+        host.includes('cloudworkstations') ||
+        host.includes('firebase') ||
+        host.includes('studio');
+
+      const isGoogleLinked = user.providerData.some(p => p.providerId === 'google.com');
+      if (preferRedirect) {
+        localStorage.setItem('calendar_oauth_flow', 'redirect');
+        sessionStorage.setItem('calendar_oauth_redirect', '1');
+        sessionStorage.setItem('calendar_settings_reopen', '1');
+        if (isGoogleLinked) {
+          await reauthenticateWithRedirect(user, provider);
+        } else {
+          await linkWithRedirect(user, provider);
+        }
+        return;
+      }
+
       // IMPORTANT: Keep the current app session. Using signInWithPopup() swaps the Firebase Auth user,
       // which can momentarily set isAuthenticated=false in App.tsx and unmount this modal (losing state).
-      const isGoogleLinked = user.providerData.some(p => p.providerId === 'google.com');
       const result: UserCredential = isGoogleLinked
         ? await reauthenticateWithPopup(user, provider)
         : await linkWithPopup(user, provider);
@@ -115,6 +141,7 @@ const CalendarSettings: React.FC<Props> = ({ isOpen, onClose, orders, customers,
 
       if (shouldFallback) {
         try {
+          localStorage.setItem('calendar_oauth_flow', 'redirect');
           sessionStorage.setItem('calendar_oauth_redirect', '1');
           sessionStorage.setItem('calendar_settings_reopen', '1');
           const isGoogleLinked = user.providerData.some(p => p.providerId === 'google.com');
