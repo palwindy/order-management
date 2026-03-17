@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { Order, Customer, Product, OrderStatus } from '../types';
 import { Plus, Search, Truck } from 'lucide-react';
+import { getPrefectureFromAddress } from '../utils';
 
 interface Props {
   orders: Order[];
@@ -95,6 +96,7 @@ const OrderManager: React.FC<Props> = ({ orders, setOrders, customers, products,
                   const firstProduct = products.find(p => p.id === firstItem?.productId);
                   const isTodayShipment = order.shippingDate === todayStr && order.status === 'Pending';
                   const isDateUndecided = order.status === 'Pending' && (!order.shippingDate || !order.deliveryDate);
+                  const prefecture = getPrefectureFromAddress(customer?.address);
                   
                   return (
                     <tr 
@@ -115,6 +117,9 @@ const OrderManager: React.FC<Props> = ({ orders, setOrders, customers, products,
                           {isTodayShipment && <span className="text-[9px] bg-rose-600 text-white px-1.5 rounded-full ml-1">本日</span>}
                           {isDateUndecided && !isTodayShipment && (
                             <span className="text-[9px] bg-amber-500 text-white px-1.5 rounded-full ml-1">日付未定</span>
+                          )}
+                          {prefecture && (
+                            <span className="text-[9px] font-black text-slate-500 ml-1">{prefecture}</span>
                           )}
                         </div>
                       </td>
@@ -180,6 +185,7 @@ const OrderManager: React.FC<Props> = ({ orders, setOrders, customers, products,
             const firstProduct = products.find(p => p.id === firstItem?.productId);
             const isTodayShipment = order.shippingDate === todayStr && order.status === 'Pending';
             const isDateUndecided = order.status === 'Pending' && (!order.shippingDate || !order.deliveryDate);
+            const prefecture = getPrefectureFromAddress(customer?.address);
 
             return (
               <div
@@ -203,6 +209,9 @@ const OrderManager: React.FC<Props> = ({ orders, setOrders, customers, products,
                       )}
                       {isDateUndecided && !isTodayShipment && (
                         <span className="text-[9px] bg-amber-500 text-white px-1.5 rounded-full ml-1">日付未定</span>
+                      )}
+                      {prefecture && (
+                        <span className="text-[9px] font-black text-slate-500 ml-1">{prefecture}</span>
                       )}
                     </div>
                     <div className="text-xs font-bold text-slate-400 flex items-center gap-1">

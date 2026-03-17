@@ -14,3 +14,9 @@ export const sortCustomersById = (customers: Customer[]): Customer[] => {
     return aSub.localeCompare(bSub);
   });
 };
+
+export const getPrefectureFromAddress = (address?: string): string => {
+  if (!address) return '';
+  const match = address.match(/(東京都|北海道|大阪府|京都府|.{2,3}県)/);
+  return match ? match[1] : '';
+};

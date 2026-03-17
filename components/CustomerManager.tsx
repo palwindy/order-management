@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Customer } from '../types';
-import { UserPlus, Search, Mail, Phone, Printer, Trash2, X, AlertTriangle, MapPin } from 'lucide-react';
-import { sortCustomersById } from '../utils';
+import { UserPlus, Search, Printer, Trash2, X, AlertTriangle, MapPin } from 'lucide-react';
+import { getPrefectureFromAddress, sortCustomersById } from '../utils';
 
 interface Props {
   customers: Customer[];
@@ -147,8 +147,7 @@ const CustomerManager: React.FC<Props> = ({ customers, setCustomers }) => {
               <tr className="text-slate-500 font-bold uppercase text-[10px] tracking-widest border-b border-slate-100">
                 <th className="px-3 sm:px-6 py-4 w-32">顧客ID</th>
                 <th className="px-3 sm:px-6 py-4">会社名</th>
-                <th className="px-3 sm:px-6 py-4">担当者</th>
-                <th className="px-3 sm:px-6 py-4">連絡先</th>
+                <th className="px-3 sm:px-6 py-4">住所</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
@@ -168,16 +167,8 @@ const CustomerManager: React.FC<Props> = ({ customers, setCustomers }) => {
                       {customer.company || customer.name}
                     </span>
                   </td>
-                  <td className="px-3 sm:px-6 py-4 font-medium text-slate-700">{customer.name}</td>
-                  <td className="px-3 sm:px-6 py-4 text-xs">
-                    <div className="flex items-center gap-1.5 text-slate-500">
-                      <Mail className="w-3.5 h-3.5" />
-                      <span>{customer.email}</span>
-                    </div>
-                    <div className="flex items-center gap-1.5 text-slate-500 mt-1">
-                      <Phone className="w-3.5 h-3.5" />
-                      <span>{customer.phone}</span>
-                    </div>
+                  <td className="px-3 sm:px-6 py-4 text-sm font-bold text-slate-600">
+                    {getPrefectureFromAddress(customer.address) || '—'}
                   </td>
                 </tr>
               ))}

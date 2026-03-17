@@ -193,7 +193,7 @@ const OrderEditModal: React.FC<Props> = ({ isOpen, onClose, editingOrder, custom
               <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-3">顧客（会社名）</label>
               {editingOrder ? (
                 <div className="w-full px-5 py-4 bg-slate-100 border border-slate-200 rounded-2xl text-base font-bold text-slate-600 cursor-not-allowed">
-                  {selectedCustomer?.company} ({selectedCustomer?.name})
+                  {selectedCustomer?.company}
                 </div>
               ) : (
                 <div className="relative group">
@@ -204,7 +204,7 @@ const OrderEditModal: React.FC<Props> = ({ isOpen, onClose, editingOrder, custom
                     className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl text-base font-bold appearance-none focus:ring-4 focus:ring-indigo-500/10 outline-none transition-all group-hover:bg-slate-100 text-slate-900"
                   >
                     <option value="">顧客を選択してください</option>
-                    {sortedCustomers.map(c => <option key={c.id} value={c.id}>{c.id} {c.company} ({c.name})</option>)}
+                    {sortedCustomers.map(c => <option key={c.id} value={c.id}>{c.id} {c.company}</option>)}
                   </select>
                   <div className="absolute right-5 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
                     <X className="w-4 h-4 rotate-45" />
