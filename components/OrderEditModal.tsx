@@ -332,10 +332,10 @@ const OrderEditModal: React.FC<Props> = ({ isOpen, onClose, editingOrder, custom
                   <button
                     type="button"
                     onClick={() => openDatePicker(shippingDateInputRef)}
-                    className="px-3 sm:px-4 py-3 sm:py-4 bg-white border border-slate-200 rounded-2xl text-xs sm:text-sm font-black text-slate-600 hover:bg-slate-50 transition-all flex items-center gap-2"
+                    aria-label="出荷日のカレンダーを開く"
+                    className="px-3 sm:px-4 py-3 sm:py-4 bg-white border border-slate-200 rounded-2xl text-slate-600 hover:bg-slate-50 transition-all flex items-center"
                   >
                     <Calendar className="w-4 h-4" />
-                    日付選択
                   </button>
                   <input
                     ref={shippingDateInputRef}
@@ -371,10 +371,10 @@ const OrderEditModal: React.FC<Props> = ({ isOpen, onClose, editingOrder, custom
                   <button
                     type="button"
                     onClick={() => openDatePicker(deliveryDateInputRef)}
-                    className="px-3 sm:px-4 py-3 sm:py-4 bg-white border border-slate-200 rounded-2xl text-xs sm:text-sm font-black text-slate-600 hover:bg-slate-50 transition-all flex items-center gap-2"
+                    aria-label="納品日のカレンダーを開く"
+                    className="px-3 sm:px-4 py-3 sm:py-4 bg-white border border-slate-200 rounded-2xl text-slate-600 hover:bg-slate-50 transition-all flex items-center"
                   >
                     <Calendar className="w-4 h-4" />
-                    日付選択
                   </button>
                   <input
                     ref={deliveryDateInputRef}

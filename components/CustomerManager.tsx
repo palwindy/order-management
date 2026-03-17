@@ -202,17 +202,17 @@ const CustomerManager: React.FC<Props> = ({ customers, setCustomers }) => {
                 
                 <div className="md:col-span-2">
                   <label className="block text-xs font-bold text-slate-400 mb-1">担当者名</label>
-                  <input name="name" defaultValue={editingCustomer?.name} required className="w-full px-4 py-2 bg-slate-50 border border-slate-100 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all" />
+                  <input name="name" defaultValue={editingCustomer?.name} className="w-full px-4 py-2 bg-slate-50 border border-slate-100 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all" />
                 </div>
                 
                 <div className="md:col-span-2">
                   <label className="block text-xs font-bold text-slate-400 mb-1">メールアドレス</label>
-                  <input name="email" type="email" defaultValue={editingCustomer?.email} required className="w-full px-4 py-2 bg-slate-50 border border-slate-100 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all" />
+                  <input name="email" type="email" defaultValue={editingCustomer?.email} className="w-full px-4 py-2 bg-slate-50 border border-slate-100 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all" />
                 </div>
 
                 <div>
                   <label className="block text-xs font-bold text-slate-400 mb-1">電話番号</label>
-                  <input name="phone" defaultValue={editingCustomer?.phone} required className="w-full px-4 py-2 bg-slate-50 border border-slate-100 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all" />
+                  <input name="phone" defaultValue={editingCustomer?.phone} className="w-full px-4 py-2 bg-slate-50 border border-slate-100 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all" />
                 </div>
                 
                 <div>
