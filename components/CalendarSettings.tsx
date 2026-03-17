@@ -1,15 +1,20 @@
 import React, { useState, useEffect } from 'react';
 import { X, Calendar, CheckCircle2, AlertTriangle, Loader2, UserCircle } from 'lucide-react';
-import { getAuth, GoogleAuthProvider, signInWithPopup, UserCredential } from 'firebase/auth';
+import { getAuth, GoogleAuthProvider, linkWithPopup, reauthenticateWithPopup, UserCredential } from 'firebase/auth';
+import type { Customer, Order, Product } from '../types';
+import { syncShippingOrdersToGoogleCalendar } from '../googleCalendar';
 
 const CALENDAR_SCOPE = 'https://www.googleapis.com/auth/calendar.events';
 
 interface Props {
   isOpen: boolean;
+  orders: Order[];
+  customers: Customer[];
+  products: Product[];
   onClose: () => void;
 }
 
-const CalendarSettings: React.FC<Props> = ({ isOpen, onClose }) => {
+const CalendarSettings: React.FC<Props> = ({ isOpen, onClose, orders, customers, products }) => {
   const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'success' | 'error'>('idle');
   const [connectedEmail, setConnectedEmail] = useState<string>('');
   const [pendingEmail, setPendingEmail] = useState<string>('');
@@ -31,15 +36,29 @@ const CalendarSettings: React.FC<Props> = ({ isOpen, onClose }) => {
     console.log('Starting Popup...');
 
     const auth = getAuth();
+    const user = auth.currentUser;
+    if (!user) {
+      alert('先にシステムへログインしてください。');
+      return;
+    }
+
     const provider = new GoogleAuthProvider();
     provider.addScope(CALENDAR_SCOPE);
 
     try {
-      const result: UserCredential = await signInWithPopup(auth, provider);
+      // IMPORTANT: Keep the current app session. Using signInWithPopup() swaps the Firebase Auth user,
+      // which can momentarily set isAuthenticated=false in App.tsx and unmount this modal (losing state).
+      const isGoogleLinked = user.providerData.some(p => p.providerId === 'google.com');
+      const result: UserCredential = isGoogleLinked
+        ? await reauthenticateWithPopup(user, provider)
+        : await linkWithPopup(user, provider);
       const credential = GoogleAuthProvider.credentialFromResult(result);
-      if (result.user.email) {
-        setPendingEmail(result.user.email);
-      }
+
+      const googleEmail =
+        result.user.providerData.find(p => p.providerId === 'google.com')?.email ||
+        '';
+      if (googleEmail) setPendingEmail(googleEmail);
+
       if (credential?.accessToken) {
         setPendingToken(credential.accessToken);
       }
@@ -54,16 +73,28 @@ const CalendarSettings: React.FC<Props> = ({ isOpen, onClose }) => {
 
     setSyncStatus('syncing');
     try {
-      if (pendingToken) {
-        localStorage.setItem('googleAccessToken', pendingToken);
-      }
+      const accessToken = pendingToken || localStorage.getItem('googleAccessToken') || '';
+      if (!accessToken) throw new Error('アクセストークンを取得できませんでした。');
+
+      // Save first so other parts can read it immediately.
+      localStorage.setItem('googleAccessToken', accessToken);
       localStorage.setItem('googleCalendarEmail', pendingEmail);
+
+      await syncShippingOrdersToGoogleCalendar({
+        accessToken,
+        orders,
+        customers,
+        products,
+      });
+
       setConnectedEmail(pendingEmail);
       setPendingEmail('');
       setPendingToken('');
       setSyncStatus('success');
       setTimeout(() => setSyncStatus('idle'), 2000);
-    } catch {
+    } catch (err: any) {
+      console.error(err);
+      alert(err?.message || 'カレンダー連携に失敗しました。');
       setSyncStatus('error');
       setTimeout(() => setSyncStatus('idle'), 3000);
     }

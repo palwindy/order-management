@@ -32,7 +32,7 @@ import { collection, doc, setDoc, deleteDoc, getDocs, writeBatch, addDoc, query,
 import toast, { Toaster } from 'react-hot-toast';
 import { getAuth, GoogleAuthProvider, signInWithEmailAndPassword, onAuthStateChanged, signOut } from 'firebase/auth';
 
-const APP_VERSION = "Ver.1.80";
+const APP_VERSION = "Ver.1.81";
 const COMPANY_NAME = "注文管理システム";
 const ADMIN_EMAIL = "admin@chumon-kanri.com";
 
@@ -945,6 +945,9 @@ const App: React.FC = () => {
 
       <CalendarSettings
         isOpen={isCalendarSettingsOpen}
+        orders={orders}
+        customers={customers}
+        products={products}
         onClose={() => setIsCalendarSettingsOpen(false)}
       />
 
