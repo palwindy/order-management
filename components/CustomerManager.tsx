@@ -170,12 +170,12 @@ const CustomerManager: React.FC<Props> = ({ customers, setCustomers }) => {
                       {customer.id}
                     </span>
                   </td>
-                  <td className="px-3 sm:px-6 py-4 leading-snug">
+                  <td className="px-2 sm:px-5 py-4 leading-snug">
                     <span className={isBranch(customer.id) ? 'text-slate-500 pl-4' : 'font-bold text-slate-800'}>
                       {customer.company || customer.name}
                     </span>
                   </td>
-                  <td className="px-3 sm:px-6 py-4 text-sm font-bold text-slate-600">
+                  <td className="px-2 sm:px-5 py-4 text-sm font-bold text-slate-600">
                     {getPrefectureFromAddress(customer.address) || '—'}
                   </td>
                 </tr>
