@@ -13,7 +13,7 @@ import {
 import type { Customer, Order, Product } from '../types';
 import { syncShippingOrdersToGoogleCalendar } from '../googleCalendar';
 
-const CALENDAR_SCOPE = 'https://www.googleapis.com/auth/calendar.events';
+const CALENDAR_SCOPE = 'https://www.googleapis.com/auth/calendar';
 
 interface Props {
   isOpen: boolean;
@@ -208,9 +208,9 @@ const CalendarSettings: React.FC<Props> = ({ isOpen, onClose, orders, customers,
     }
   };
 
-  const ensureAccessToken = async (): Promise<string | null> => {
+  const ensureAccessToken = async (forceReauth: boolean = false): Promise<string | null> => {
     const cached = pendingToken || localStorage.getItem('googleAccessToken') || '';
-    if (cached) return cached;
+    if (cached && !forceReauth) return cached;
 
     const auth = getAuth();
     const user = auth.currentUser;
@@ -244,7 +244,7 @@ const CalendarSettings: React.FC<Props> = ({ isOpen, onClose, orders, customers,
 
     setSyncStatus('syncing');
     try {
-      const accessToken = await ensureAccessToken();
+      let accessToken = await ensureAccessToken(false);
       if (!accessToken) return;
 
       // Save first so other parts can read it immediately.
@@ -252,15 +252,37 @@ const CalendarSettings: React.FC<Props> = ({ isOpen, onClose, orders, customers,
       localStorage.setItem('googleCalendarEmail', pendingEmail);
       localStorage.setItem('googleCalendarName', calendarName);
 
-      const { ensureCalendarId } = await import('../googleCalendar');
-      const ensuredCalendarId = await ensureCalendarId({
-        accessToken,
-        calendarId,
-        calendarName,
-      });
-      if (ensuredCalendarId) {
-        localStorage.setItem('googleCalendarId', ensuredCalendarId);
-        setCalendarId(ensuredCalendarId);
+      let ensuredCalendarId = calendarId;
+      try {
+        const { ensureCalendarId } = await import('../googleCalendar');
+        ensuredCalendarId = await ensureCalendarId({
+          accessToken,
+          calendarId,
+          calendarName,
+        });
+        if (ensuredCalendarId) {
+          localStorage.setItem('googleCalendarId', ensuredCalendarId);
+          setCalendarId(ensuredCalendarId);
+        }
+      } catch (err: any) {
+        // If scope is insufficient, reauth once with full calendar scope.
+        const msg = String(err?.message || '');
+        if (msg.includes('403') || msg.includes('insufficient') || msg.includes('PERMISSION_DENIED')) {
+          accessToken = await ensureAccessToken(true);
+          if (!accessToken) return;
+          const { ensureCalendarId } = await import('../googleCalendar');
+          ensuredCalendarId = await ensureCalendarId({
+            accessToken,
+            calendarId,
+            calendarName,
+          });
+          if (ensuredCalendarId) {
+            localStorage.setItem('googleCalendarId', ensuredCalendarId);
+            setCalendarId(ensuredCalendarId);
+          }
+        } else {
+          throw err;
+        }
       }
 
       await syncShippingOrdersToGoogleCalendar({
@@ -279,6 +301,10 @@ const CalendarSettings: React.FC<Props> = ({ isOpen, onClose, orders, customers,
     } catch (err: any) {
       console.error(err);
       const msg = String(err?.message || '');
+      if (msg.includes('403') || msg.includes('insufficient') || msg.includes('PERMISSION_DENIED')) {
+        localStorage.removeItem('googleAccessToken');
+        setPendingToken('');
+      }
       if (msg.includes('401') || msg.includes('UNAUTHENTICATED')) {
         localStorage.removeItem('googleAccessToken');
         setPendingToken('');
