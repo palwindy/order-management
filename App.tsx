@@ -33,7 +33,7 @@ import toast, { Toaster } from 'react-hot-toast';
 import { getAuth, GoogleAuthProvider, signInWithEmailAndPassword, onAuthStateChanged, signOut, getRedirectResult, reauthenticateWithPopup, reauthenticateWithRedirect } from 'firebase/auth';
 import { syncShippingOrdersToGoogleCalendar, ensureCalendarId } from './googleCalendar';
 
-const APP_VERSION = "Ver.2.09";
+const APP_VERSION = "Ver.2.10";
 const COMPANY_NAME = "注文管理システム";
 const ADMIN_EMAIL = "admin@chumon-kanri.com";
 
@@ -235,6 +235,23 @@ const App: React.FC = () => {
     }
   }, []);
 
+  // After OAuth redirect triggered by the manual sync button, return to calendar and sync once.
+  useEffect(() => {
+    if (!isAuthenticated || isLoading) return;
+    if (sessionStorage.getItem('calendar_sync_after_redirect') !== '1') return;
+
+    sessionStorage.removeItem('calendar_sync_after_redirect');
+    const returnTab = sessionStorage.getItem('calendar_return_tab') as TabId | null;
+    if (returnTab) {
+      sessionStorage.removeItem('calendar_return_tab');
+      setActiveTab(returnTab);
+    }
+
+    setTimeout(() => {
+      runCalendarSync('manual');
+    }, 200);
+  }, [isAuthenticated, isLoading]);
+
   // 初回ロード
   useEffect(() => {
     if (!isAuthenticated) return;
@@ -339,7 +356,10 @@ const App: React.FC = () => {
     setIsOrderModalOpen(true);
   };
 
-  const ensureCalendarAccessToken = async (forceReauth: boolean = false): Promise<string | null> => {
+  const ensureCalendarAccessToken = async (
+    forceReauth: boolean = false,
+    intent: 'settings' | 'sync' = 'sync'
+  ): Promise<string | null> => {
     const cached = localStorage.getItem('googleAccessToken') || '';
     if (cached && !forceReauth) return cached;
 
@@ -356,7 +376,12 @@ const App: React.FC = () => {
     try {
       if (preferRedirect) {
         sessionStorage.setItem('calendar_oauth_redirect', '1');
-        sessionStorage.setItem('calendar_settings_reopen', '1');
+        if (intent === 'settings') {
+          sessionStorage.setItem('calendar_settings_reopen', '1');
+        } else {
+          sessionStorage.setItem('calendar_sync_after_redirect', '1');
+          sessionStorage.setItem('calendar_return_tab', 'calendar');
+        }
         await reauthenticateWithRedirect(user, provider);
         return null;
       }
@@ -375,7 +400,7 @@ const App: React.FC = () => {
     const isManual = mode === 'manual';
     if (isManual) setManualSyncStatus('syncing');
     try {
-      let accessToken = await ensureCalendarAccessToken(false);
+      let accessToken = await ensureCalendarAccessToken(false, 'sync');
       if (!accessToken) {
         if (isManual) {
           setManualSyncStatus('error');
@@ -420,7 +445,7 @@ const App: React.FC = () => {
         localStorage.removeItem('googleAccessToken');
         localStorage.setItem('calendarNeedsReauth', '1');
         if (isManual) {
-          const retryToken = await ensureCalendarAccessToken(true);
+          const retryToken = await ensureCalendarAccessToken(true, 'sync');
           if (retryToken) {
             const calendarName = localStorage.getItem('googleCalendarName') || '注文管理アプリ';
             let calendarId = localStorage.getItem('googleCalendarId') || '';
