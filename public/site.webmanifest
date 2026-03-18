@@ -1,6 +1,11 @@
-{
-  "name": "注文管理システム",
+﻿{
+  "name": "注文管理アプリ",
   "short_name": "注文管理",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "theme_color": "#ffffff",
+  "background_color": "#ffffff",
   "icons": [
     {
       "src": "/apple-touch-icon.png",
@@ -14,8 +19,5 @@
       "type": "image/png",
       "purpose": "any"
     }
-  ],
-  "theme_color": "#ffffff",
-  "background_color": "#ffffff",
-  "display": "standalone"
+  ]
 }
