@@ -133,13 +133,33 @@ async function updateCalendar(accessToken: string, calendarId: string, summary: 
   });
 }
 
+async function listCalendars(accessToken: string): Promise<Array<{ id: string; summary: string }>> {
+  const calendars: Array<{ id: string; summary: string }> = [];
+  let pageToken: string | undefined = undefined;
+
+  do {
+    const url = new URL('https://www.googleapis.com/calendar/v3/users/me/calendarList');
+    if (pageToken) url.searchParams.set('pageToken', pageToken);
+    const data = await calendarFetch(accessToken, url.toString(), { method: 'GET' });
+    const items = (data?.items || []) as Array<{ id: string; summary: string }>;
+    calendars.push(...items);
+    pageToken = data?.nextPageToken;
+  } while (pageToken);
+
+  return calendars;
+}
+
 export async function ensureCalendarId(args: { accessToken: string; calendarId: string; calendarName: string }) {
   const { accessToken, calendarId, calendarName } = args;
   if (calendarId) {
     await updateCalendar(accessToken, calendarId, calendarName);
     return calendarId;
   }
-  const createdId = await createCalendar(accessToken, calendarName || '注文管理アプリ');
+  const name = calendarName || '注文管理アプリ';
+  const calendars = await listCalendars(accessToken);
+  const existing = calendars.find(c => c.summary === name);
+  if (existing?.id) return existing.id;
+  const createdId = await createCalendar(accessToken, name);
   return createdId;
 }
 

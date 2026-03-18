@@ -244,7 +244,9 @@ const CalendarSettings: React.FC<Props> = ({ isOpen, onClose, orders, customers,
 
     setSyncStatus('syncing');
     try {
-      let accessToken = await ensureAccessToken(false);
+      const storedCalendarName = localStorage.getItem('googleCalendarName') || '注文管理アプリ';
+      const shouldForceReauth = calendarId === '' || calendarName !== storedCalendarName;
+      let accessToken = await ensureAccessToken(shouldForceReauth);
       if (!accessToken) return;
 
       // Save first so other parts can read it immediately.
@@ -285,13 +287,30 @@ const CalendarSettings: React.FC<Props> = ({ isOpen, onClose, orders, customers,
         }
       }
 
-      await syncShippingOrdersToGoogleCalendar({
-        accessToken,
-        orders,
-        customers,
-        products,
-        calendarId: ensuredCalendarId || calendarId || 'primary',
-      });
+      try {
+        await syncShippingOrdersToGoogleCalendar({
+          accessToken,
+          orders,
+          customers,
+          products,
+          calendarId: ensuredCalendarId || calendarId || 'primary',
+        });
+      } catch (err: any) {
+        const msg = String(err?.message || '');
+        if (msg.includes('403') || msg.includes('insufficient') || msg.includes('PERMISSION_DENIED')) {
+          accessToken = await ensureAccessToken(true);
+          if (!accessToken) return;
+          await syncShippingOrdersToGoogleCalendar({
+            accessToken,
+            orders,
+            customers,
+            products,
+            calendarId: ensuredCalendarId || calendarId || 'primary',
+          });
+        } else {
+          throw err;
+        }
+      }
 
       setConnectedEmail(pendingEmail);
       setPendingEmail('');
