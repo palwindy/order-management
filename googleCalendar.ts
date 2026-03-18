@@ -5,6 +5,7 @@ type SyncArgs = {
   orders: Order[];
   customers: Customer[];
   products: Product[];
+  calendarId: string;
 };
 
 type GoogleCalendarEvent = {
@@ -24,7 +25,8 @@ function addDaysISO(dateISO: string, days: number): string {
 
 function buildOrderEvent(order: Order, customers: Customer[], products: Product[]): GoogleCalendarEvent {
   const customer = customers.find(c => c.id === order.customerId);
-  const customerName = customer?.company ? `${customer.company} ${customer.name}` : (customer?.name || order.customerId);
+  const customerName = customer?.company || customer?.name || order.customerId;
+  const deliveryLabel = order.deliveryDate ? `${order.deliveryDate}着` : '納品日未定';
 
   const itemLines = order.items.map(it => {
     const productName = products.find(p => p.id === it.productId)?.name || it.productId;
@@ -33,18 +35,20 @@ function buildOrderEvent(order: Order, customers: Customer[], products: Product[
 
   const description = [
     `注文ID: ${order.id}`,
-    `納品日: ${order.deliveryDate || '-'}`,
+    `納品日: ${order.deliveryDate || '未定'}`,
     '',
     '明細:',
     ...itemLines,
+    ...(order.notes ? ['', `備考: ${order.notes}`] : []),
     '',
-    '※ 注文管理システムから同期',
+    '※ 注文管理アプリから同期',
   ].join('\n');
 
   // All-day event on shipping date (end is exclusive).
   return {
-    summary: `出荷予定: ${customerName}`,
+    summary: `${customerName}出荷（${deliveryLabel}）`,
     description,
+    location: customer?.address || '',
     start: { date: order.shippingDate },
     end: { date: addDaysISO(order.shippingDate, 1) },
     extendedProperties: {
@@ -78,11 +82,11 @@ async function calendarFetch(accessToken: string, input: string, init?: RequestI
   return null;
 }
 
-async function findExistingEventId(accessToken: string, order: Order): Promise<string | null> {
+async function findExistingEventId(accessToken: string, order: Order, calendarId: string): Promise<string | null> {
   const timeMin = `${order.shippingDate}T00:00:00+09:00`;
   const timeMax = `${addDaysISO(order.shippingDate, 1)}T00:00:00+09:00`;
 
-  const url = new URL('https://www.googleapis.com/calendar/v3/calendars/primary/events');
+  const url = new URL(`https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events`);
   url.searchParams.set('singleEvents', 'true');
   url.searchParams.set('maxResults', '1');
   url.searchParams.set('orderBy', 'startTime');
@@ -95,12 +99,12 @@ async function findExistingEventId(accessToken: string, order: Order): Promise<s
   return items[0]?.id || null;
 }
 
-async function listManagedEvents(accessToken: string): Promise<GoogleCalendarEvent[]> {
+async function listManagedEvents(accessToken: string, calendarId: string): Promise<GoogleCalendarEvent[]> {
   const events: GoogleCalendarEvent[] = [];
   let pageToken: string | undefined = undefined;
 
   do {
-    const url = new URL('https://www.googleapis.com/calendar/v3/calendars/primary/events');
+    const url = new URL(`https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events`);
     url.searchParams.set('maxResults', '2500');
     url.searchParams.set('privateExtendedProperty', 'source=order-management');
     if (pageToken) url.searchParams.set('pageToken', pageToken);
@@ -114,20 +118,46 @@ async function listManagedEvents(accessToken: string): Promise<GoogleCalendarEve
   return events;
 }
 
+async function createCalendar(accessToken: string, summary: string): Promise<string> {
+  const data = await calendarFetch(accessToken, 'https://www.googleapis.com/calendar/v3/calendars', {
+    method: 'POST',
+    body: JSON.stringify({ summary }),
+  });
+  return data?.id || '';
+}
+
+async function updateCalendar(accessToken: string, calendarId: string, summary: string): Promise<void> {
+  await calendarFetch(accessToken, `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ summary }),
+  });
+}
+
+export async function ensureCalendarId(args: { accessToken: string; calendarId: string; calendarName: string }) {
+  const { accessToken, calendarId, calendarName } = args;
+  if (calendarId) {
+    await updateCalendar(accessToken, calendarId, calendarName);
+    return calendarId;
+  }
+  const createdId = await createCalendar(accessToken, calendarName || '注文管理アプリ');
+  return createdId;
+}
+
 export async function syncShippingOrdersToGoogleCalendar(args: SyncArgs) {
-  const { accessToken, orders, customers, products } = args;
+  const { accessToken, orders, customers, products, calendarId } = args;
+  const targetCalendarId = calendarId || 'primary';
 
   const targets = orders.filter(o => o.status === 'Pending' && !!o.shippingDate);
   const targetIds = new Set(targets.map(o => o.id));
 
   // Remove calendar events that no longer exist (deleted or no shipping date)
-  const existingEvents = await listManagedEvents(accessToken);
+  const existingEvents = await listManagedEvents(accessToken, targetCalendarId);
   for (const event of existingEvents) {
     const orderId = event.extendedProperties?.private?.orderId;
     if (orderId && !targetIds.has(orderId) && event.id) {
       await calendarFetch(
         accessToken,
-        `https://www.googleapis.com/calendar/v3/calendars/primary/events/${encodeURIComponent(event.id)}`,
+        `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(targetCalendarId)}/events/${encodeURIComponent(event.id)}`,
         { method: 'DELETE' }
       );
     }
@@ -135,18 +165,18 @@ export async function syncShippingOrdersToGoogleCalendar(args: SyncArgs) {
 
   for (const order of targets) {
     const event = buildOrderEvent(order, customers, products);
-    const existingId = await findExistingEventId(accessToken, order);
+    const existingId = await findExistingEventId(accessToken, order, targetCalendarId);
 
     if (existingId) {
       await calendarFetch(
         accessToken,
-        `https://www.googleapis.com/calendar/v3/calendars/primary/events/${encodeURIComponent(existingId)}`,
+        `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(targetCalendarId)}/events/${encodeURIComponent(existingId)}`,
         { method: 'PATCH', body: JSON.stringify(event) }
       );
     } else {
       await calendarFetch(
         accessToken,
-        'https://www.googleapis.com/calendar/v3/calendars/primary/events',
+        `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(targetCalendarId)}/events`,
         { method: 'POST', body: JSON.stringify(event) }
       );
     }

@@ -28,13 +28,23 @@ const CalendarSettings: React.FC<Props> = ({ isOpen, onClose, orders, customers,
   const [connectedEmail, setConnectedEmail] = useState<string>('');
   const [pendingEmail, setPendingEmail] = useState<string>('');
   const [pendingToken, setPendingToken] = useState<string>('');
+  const [calendarName, setCalendarName] = useState<string>(
+    localStorage.getItem('googleCalendarName') || '注文管理アプリ'
+  );
+  const [calendarId, setCalendarId] = useState<string>(
+    localStorage.getItem('googleCalendarId') || ''
+  );
 
   useEffect(() => {
     if (isOpen) {
       const savedEmail = localStorage.getItem('googleCalendarEmail') || '';
+      const savedCalendarName = localStorage.getItem('googleCalendarName') || '注文管理アプリ';
+      const savedCalendarId = localStorage.getItem('googleCalendarId') || '';
       setConnectedEmail(savedEmail);
       setPendingEmail(savedEmail);
       setPendingToken('');
+      setCalendarName(savedCalendarName);
+      setCalendarId(savedCalendarId);
 
       const auth = getAuth();
       const user = auth.currentUser;
@@ -240,12 +250,25 @@ const CalendarSettings: React.FC<Props> = ({ isOpen, onClose, orders, customers,
       // Save first so other parts can read it immediately.
       localStorage.setItem('googleAccessToken', accessToken);
       localStorage.setItem('googleCalendarEmail', pendingEmail);
+      localStorage.setItem('googleCalendarName', calendarName);
+
+      const { ensureCalendarId } = await import('../googleCalendar');
+      const ensuredCalendarId = await ensureCalendarId({
+        accessToken,
+        calendarId,
+        calendarName,
+      });
+      if (ensuredCalendarId) {
+        localStorage.setItem('googleCalendarId', ensuredCalendarId);
+        setCalendarId(ensuredCalendarId);
+      }
 
       await syncShippingOrdersToGoogleCalendar({
         accessToken,
         orders,
         customers,
         products,
+        calendarId: ensuredCalendarId || calendarId || 'primary',
       });
 
       setConnectedEmail(pendingEmail);
@@ -255,6 +278,11 @@ const CalendarSettings: React.FC<Props> = ({ isOpen, onClose, orders, customers,
       setTimeout(() => setSyncStatus('idle'), 2000);
     } catch (err: any) {
       console.error(err);
+      const msg = String(err?.message || '');
+      if (msg.includes('401') || msg.includes('UNAUTHENTICATED')) {
+        localStorage.removeItem('googleAccessToken');
+        setPendingToken('');
+      }
       alert(err?.message || 'カレンダー連携に失敗しました。');
       setSyncStatus('error');
       setTimeout(() => setSyncStatus('idle'), 3000);
@@ -335,6 +363,19 @@ const CalendarSettings: React.FC<Props> = ({ isOpen, onClose, orders, customers,
                syncStatus === 'success' ? '同期完了' :
                syncStatus === 'error'   ? '連携エラー' : '保存'}
             </button>
+          </div>
+
+          <div className="space-y-2">
+            <label className="block text-[10px] text-slate-400 font-bold uppercase tracking-widest">カレンダー名</label>
+            <input
+              value={calendarName}
+              onChange={(e) => setCalendarName(e.target.value)}
+              className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-bold text-slate-800 outline-none focus:ring-2 focus:ring-indigo-500"
+              placeholder="注文管理アプリ"
+            />
+            <p className="text-[10px] text-slate-400 font-bold">
+              連携済み: {calendarId ? 'はい' : 'いいえ'}
+            </p>
           </div>
 
           <p className="text-[10px] text-slate-400 font-bold text-center">
