@@ -282,6 +282,19 @@ const CalendarSettings: React.FC<Props> = ({ isOpen, onClose, orders, customers,
             localStorage.setItem('googleCalendarId', ensuredCalendarId);
             setCalendarId(ensuredCalendarId);
           }
+        } else if (msg.includes('404') || msg.includes('Not Found')) {
+          localStorage.removeItem('googleCalendarId');
+          setCalendarId('');
+          const { ensureCalendarId } = await import('../googleCalendar');
+          ensuredCalendarId = await ensureCalendarId({
+            accessToken,
+            calendarId: '',
+            calendarName,
+          });
+          if (ensuredCalendarId) {
+            localStorage.setItem('googleCalendarId', ensuredCalendarId);
+            setCalendarId(ensuredCalendarId);
+          }
         } else {
           throw err;
         }
@@ -307,6 +320,26 @@ const CalendarSettings: React.FC<Props> = ({ isOpen, onClose, orders, customers,
             products,
             calendarId: ensuredCalendarId || calendarId || 'primary',
           });
+        } else if (msg.includes('404') || msg.includes('Not Found')) {
+          localStorage.removeItem('googleCalendarId');
+          setCalendarId('');
+          const { ensureCalendarId } = await import('../googleCalendar');
+          ensuredCalendarId = await ensureCalendarId({
+            accessToken,
+            calendarId: '',
+            calendarName,
+          });
+          if (ensuredCalendarId) {
+            localStorage.setItem('googleCalendarId', ensuredCalendarId);
+            setCalendarId(ensuredCalendarId);
+          }
+          await syncShippingOrdersToGoogleCalendar({
+            accessToken,
+            orders,
+            customers,
+            products,
+            calendarId: ensuredCalendarId || 'primary',
+          });
         } else {
           throw err;
         }
@@ -327,6 +360,10 @@ const CalendarSettings: React.FC<Props> = ({ isOpen, onClose, orders, customers,
       if (msg.includes('401') || msg.includes('UNAUTHENTICATED')) {
         localStorage.removeItem('googleAccessToken');
         setPendingToken('');
+      }
+      if (msg.includes('404') || msg.includes('Not Found')) {
+        localStorage.removeItem('googleCalendarId');
+        setCalendarId('');
       }
       alert(err?.message || 'カレンダー連携に失敗しました。');
       setSyncStatus('error');

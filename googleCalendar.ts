@@ -151,11 +151,21 @@ async function listCalendars(accessToken: string): Promise<Array<{ id: string; s
 
 export async function ensureCalendarId(args: { accessToken: string; calendarId: string; calendarName: string }) {
   const { accessToken, calendarId, calendarName } = args;
-  if (calendarId) {
-    await updateCalendar(accessToken, calendarId, calendarName);
-    return calendarId;
-  }
   const name = calendarName || '注文管理アプリ';
+  let currentId = calendarId;
+  if (currentId) {
+    try {
+      await updateCalendar(accessToken, currentId, name);
+      return currentId;
+    } catch (err: any) {
+      const msg = String(err?.message || '');
+      if (msg.includes('404') || msg.includes('Not Found')) {
+        currentId = '';
+      } else {
+        throw err;
+      }
+    }
+  }
   const calendars = await listCalendars(accessToken);
   const existing = calendars.find(c => c.summary === name);
   if (existing?.id) return existing.id;
