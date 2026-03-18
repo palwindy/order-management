@@ -198,13 +198,44 @@ const CalendarSettings: React.FC<Props> = ({ isOpen, onClose, orders, customers,
     }
   };
 
+  const ensureAccessToken = async (): Promise<string | null> => {
+    const cached = pendingToken || localStorage.getItem('googleAccessToken') || '';
+    if (cached) return cached;
+
+    const auth = getAuth();
+    const user = auth.currentUser;
+    if (!user) throw new Error('先にシステムへログインしてください。');
+
+    const provider = new GoogleAuthProvider();
+    provider.addScope(CALENDAR_SCOPE);
+
+    try {
+      const result = await reauthenticateWithPopup(user, provider);
+      const credential = GoogleAuthProvider.credentialFromResult(result);
+      const token = credential?.accessToken || '';
+      if (token) {
+        setPendingToken(token);
+        localStorage.setItem('googleAccessToken', token);
+        return token;
+      }
+    } catch (err) {
+      console.error(err);
+      sessionStorage.setItem('calendar_oauth_redirect', '1');
+      sessionStorage.setItem('calendar_settings_reopen', '1');
+      await reauthenticateWithRedirect(user, provider);
+      return null;
+    }
+
+    return null;
+  };
+
   const handleSave = async () => {
     if (pendingEmail === '') return;
 
     setSyncStatus('syncing');
     try {
-      const accessToken = pendingToken || localStorage.getItem('googleAccessToken') || '';
-      if (!accessToken) throw new Error('アクセストークンを取得できませんでした。');
+      const accessToken = await ensureAccessToken();
+      if (!accessToken) return;
 
       // Save first so other parts can read it immediately.
       localStorage.setItem('googleAccessToken', accessToken);

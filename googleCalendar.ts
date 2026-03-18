@@ -95,10 +95,44 @@ async function findExistingEventId(accessToken: string, order: Order): Promise<s
   return items[0]?.id || null;
 }
 
+async function listManagedEvents(accessToken: string): Promise<GoogleCalendarEvent[]> {
+  const events: GoogleCalendarEvent[] = [];
+  let pageToken: string | undefined = undefined;
+
+  do {
+    const url = new URL('https://www.googleapis.com/calendar/v3/calendars/primary/events');
+    url.searchParams.set('maxResults', '2500');
+    url.searchParams.set('privateExtendedProperty', 'source=order-management');
+    if (pageToken) url.searchParams.set('pageToken', pageToken);
+
+    const data = await calendarFetch(accessToken, url.toString(), { method: 'GET' });
+    const items = (data?.items || []) as GoogleCalendarEvent[];
+    events.push(...items);
+    pageToken = data?.nextPageToken;
+  } while (pageToken);
+
+  return events;
+}
+
 export async function syncShippingOrdersToGoogleCalendar(args: SyncArgs) {
   const { accessToken, orders, customers, products } = args;
 
   const targets = orders.filter(o => o.status === 'Pending' && !!o.shippingDate);
+  const targetIds = new Set(targets.map(o => o.id));
+
+  // Remove calendar events that no longer exist (deleted or no shipping date)
+  const existingEvents = await listManagedEvents(accessToken);
+  for (const event of existingEvents) {
+    const orderId = event.extendedProperties?.private?.orderId;
+    if (orderId && !targetIds.has(orderId) && event.id) {
+      await calendarFetch(
+        accessToken,
+        `https://www.googleapis.com/calendar/v3/calendars/primary/events/${encodeURIComponent(event.id)}`,
+        { method: 'DELETE' }
+      );
+    }
+  }
+
   for (const order of targets) {
     const event = buildOrderEvent(order, customers, products);
     const existingId = await findExistingEventId(accessToken, order);
@@ -118,4 +152,3 @@ export async function syncShippingOrdersToGoogleCalendar(args: SyncArgs) {
     }
   }
 }
-
