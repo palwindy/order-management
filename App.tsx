@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+﻿import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Users,
   Package,
@@ -33,7 +33,7 @@ import toast, { Toaster } from 'react-hot-toast';
 import { getAuth, GoogleAuthProvider, signInWithEmailAndPassword, onAuthStateChanged, signOut, getRedirectResult, reauthenticateWithPopup, reauthenticateWithRedirect } from 'firebase/auth';
 import { syncShippingOrdersToGoogleCalendar, ensureCalendarId } from './googleCalendar';
 
-const APP_VERSION = "Ver.2.10";
+const APP_VERSION = "Ver.2.11";
 const COMPANY_NAME = "注文管理システム";
 const ADMIN_EMAIL = "admin@chumon-kanri.com";
 
@@ -162,8 +162,14 @@ const App: React.FC = () => {
     (async () => {
       try {
         const result = await getRedirectResult(auth);
+        const redirectFlag = sessionStorage.getItem('calendar_oauth_redirect') === '1';
+        if (redirectFlag) {
+          sessionStorage.removeItem('calendar_oauth_redirect');
+          sessionStorage.removeItem('calendar_oauth_inflight');
+          sessionStorage.setItem('calendar_oauth_redirect_done', '1');
+        }
         if (!result) {
-          const triedRedirect = sessionStorage.getItem('calendar_oauth_redirect') === '1';
+          const triedRedirect = redirectFlag;
           if (triedRedirect) {
             const user = auth.currentUser;
             if (user) {
@@ -183,10 +189,14 @@ const App: React.FC = () => {
         if (googleEmail) localStorage.setItem('googleCalendarEmail', googleEmail);
         if (credential?.accessToken) {
           localStorage.setItem('googleAccessToken', credential.accessToken);
+          sessionStorage.removeItem('calendar_oauth_no_token');
+        } else if (redirectFlag) {
+          sessionStorage.setItem('calendar_oauth_no_token', '1');
         }
       } catch (err) {
         console.error(err);
-        if (sessionStorage.getItem('calendar_oauth_redirect') === '1') {
+        if (sessionStorage.getItem('calendar_oauth_redirect_done') === '1') {
+          sessionStorage.setItem('calendar_oauth_no_token', '1');
           alert('Google連携の結果を取得できませんでした。認証状態を確認します。');
         }
       }
@@ -195,7 +205,7 @@ const App: React.FC = () => {
 
   // After redirect, providerData may lag. Retry a few times to pick up linked Google email.
   useEffect(() => {
-    const triedRedirect = sessionStorage.getItem('calendar_oauth_redirect') === '1';
+    const triedRedirect = sessionStorage.getItem('calendar_oauth_redirect_done') === '1';
     if (!triedRedirect) return;
 
     const auth = getAuth();
@@ -212,7 +222,7 @@ const App: React.FC = () => {
             user.providerData.find(p => p.providerId === 'google.com')?.email || '';
           if (linkedGoogleEmail) {
             localStorage.setItem('googleCalendarEmail', linkedGoogleEmail);
-            sessionStorage.removeItem('calendar_oauth_redirect');
+            sessionStorage.removeItem('calendar_oauth_redirect_done');
             return;
           }
         } catch (err) {
@@ -372,9 +382,14 @@ const App: React.FC = () => {
 
     const ua = navigator.userAgent || '';
     const preferRedirect = /Android|iPhone|iPad|iPod/i.test(ua);
+    const redirectNoToken = sessionStorage.getItem('calendar_oauth_no_token') === '1';
+    const redirectInflight = sessionStorage.getItem('calendar_oauth_inflight') === '1';
 
     try {
       if (preferRedirect) {
+        if (redirectInflight) return null;
+        if (intent === 'sync' && redirectNoToken) return null;
+        sessionStorage.setItem('calendar_oauth_inflight', '1');
         sessionStorage.setItem('calendar_oauth_redirect', '1');
         if (intent === 'settings') {
           sessionStorage.setItem('calendar_settings_reopen', '1');
@@ -1205,3 +1220,5 @@ const App: React.FC = () => {
 };
 
 export default App;
+
+
