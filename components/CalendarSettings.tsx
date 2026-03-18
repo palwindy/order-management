@@ -239,8 +239,11 @@ const CalendarSettings: React.FC<Props> = ({ isOpen, onClose, orders, customers,
     return null;
   };
 
+  const isLinked = pendingEmail !== '' && pendingEmail === connectedEmail && !!calendarId;
+  const canSave = pendingEmail !== '' && !isLinked && syncStatus === 'idle';
+
   const handleSave = async () => {
-    if (pendingEmail === '') return;
+    if (!canSave) return;
 
     setSyncStatus('syncing');
     try {
@@ -418,20 +421,20 @@ const CalendarSettings: React.FC<Props> = ({ isOpen, onClose, orders, customers,
                   <p className="text-xs font-black text-slate-700 truncate">
                     {pendingEmail || connectedEmail || "アカウントを選択してください"}
                   </p>
-                  {pendingEmail && (
+                  {pendingEmail && !isLinked && (
                     <p className="text-[10px] text-orange-500 font-bold">(未連携・保存してください)</p>
                   )}
-                  {connectedEmail && !pendingEmail && (
-                     <p className="text-[10px] text-emerald-500 font-bold">連携済み</p>
+                  {isLinked && (
+                     <p className="text-[10px] text-emerald-500 font-bold">(連携済み)</p>
                   )}
               </div>
             </button>
 
             <button
               onClick={handleSave}
-              disabled={pendingEmail === '' || syncStatus !== 'idle'}
+              disabled={!canSave}
               className={`px-4 py-3 rounded-2xl text-sm font-black transition-all active:scale-95 flex-shrink-0 flex items-center gap-1.5 ${
-                pendingEmail === '' ? 'bg-slate-100 text-slate-300 cursor-not-allowed' :
+                !canSave ? 'bg-slate-100 text-slate-300 cursor-not-allowed' :
                 syncStatus === 'syncing' ? 'bg-slate-200 text-slate-500 cursor-not-allowed' :
                 syncStatus === 'success' ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-100' :
                 syncStatus === 'error'   ? 'bg-red-500 text-white shadow-lg shadow-red-100' :
@@ -455,9 +458,6 @@ const CalendarSettings: React.FC<Props> = ({ isOpen, onClose, orders, customers,
               className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-bold text-slate-800 outline-none focus:ring-2 focus:ring-indigo-500"
               placeholder="注文管理アプリ"
             />
-            <p className="text-[10px] text-slate-400 font-bold">
-              連携済み: {calendarId ? 'はい' : 'いいえ'}
-            </p>
           </div>
 
           <p className="text-[10px] text-slate-400 font-bold text-center">
