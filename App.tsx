@@ -30,10 +30,10 @@ import * as XLSX from 'xlsx-js-style';
 import { db } from './firebase';
 import { collection, doc, setDoc, deleteDoc, getDocs, writeBatch, addDoc, query, orderBy, onSnapshot } from 'firebase/firestore';
 import toast, { Toaster } from 'react-hot-toast';
-import { getAuth, GoogleAuthProvider, signInWithEmailAndPassword, onAuthStateChanged, signOut, getRedirectResult } from 'firebase/auth';
-import { syncShippingOrdersToGoogleCalendar } from './googleCalendar';
+import { getAuth, GoogleAuthProvider, signInWithEmailAndPassword, onAuthStateChanged, signOut, getRedirectResult, reauthenticateWithPopup, reauthenticateWithRedirect } from 'firebase/auth';
+import { syncShippingOrdersToGoogleCalendar, ensureCalendarId } from './googleCalendar';
 
-const APP_VERSION = "Ver.2.03";
+const APP_VERSION = "Ver.2.04";
 const COMPANY_NAME = "注文管理システム";
 const ADMIN_EMAIL = "admin@chumon-kanri.com";
 
@@ -339,31 +339,99 @@ const App: React.FC = () => {
     setIsOrderModalOpen(true);
   };
 
-  const runCalendarSync = async (): Promise<'success' | 'error'> => {
-    const accessToken = localStorage.getItem('googleAccessToken') || '';
-    const calendarId = localStorage.getItem('googleCalendarId') || '';
-    const calendarName = localStorage.getItem('googleCalendarName') || '注文管理アプリ';
+  const ensureCalendarAccessToken = async (forceReauth: boolean = false): Promise<string | null> => {
+    const cached = localStorage.getItem('googleAccessToken') || '';
+    if (cached && !forceReauth) return cached;
 
-    if (!accessToken || !calendarId) {
-      setManualSyncStatus('error');
-      setTimeout(() => setManualSyncStatus('idle'), 2000);
-      return 'error';
-    }
+    const auth = getAuth();
+    const user = auth.currentUser;
+    if (!user) return null;
+
+    const provider = new GoogleAuthProvider();
+    provider.addScope('https://www.googleapis.com/auth/calendar');
+
+    const ua = navigator.userAgent || '';
+    const preferRedirect = /Android|iPhone|iPad|iPod/i.test(ua);
 
     try {
-      setManualSyncStatus('syncing');
+      if (preferRedirect) {
+        sessionStorage.setItem('calendar_oauth_redirect', '1');
+        sessionStorage.setItem('calendar_settings_reopen', '1');
+        await reauthenticateWithRedirect(user, provider);
+        return null;
+      }
+      const result = await reauthenticateWithPopup(user, provider);
+      const credential = GoogleAuthProvider.credentialFromResult(result);
+      const token = credential?.accessToken || '';
+      if (token) localStorage.setItem('googleAccessToken', token);
+      return token || null;
+    } catch (err) {
+      console.error(err);
+      return null;
+    }
+  };
+
+  const runCalendarSync = async (): Promise<'success' | 'error'> => {
+    setManualSyncStatus('syncing');
+    try {
+      let accessToken = await ensureCalendarAccessToken(false);
+      if (!accessToken) {
+        setManualSyncStatus('error');
+        setTimeout(() => setManualSyncStatus('idle'), 2000);
+        return 'error';
+      }
+
+      const calendarName = localStorage.getItem('googleCalendarName') || '注文管理アプリ';
+      let calendarId = localStorage.getItem('googleCalendarId') || '';
+      if (!calendarId) {
+        calendarId = await ensureCalendarId({
+          accessToken,
+          calendarId: '',
+          calendarName,
+        });
+        if (calendarId) localStorage.setItem('googleCalendarId', calendarId);
+      }
+
       await syncShippingOrdersToGoogleCalendar({
         accessToken,
         orders,
         customers,
         products,
-        calendarId,
+        calendarId: calendarId || 'primary',
       });
+
       setManualSyncStatus('success');
       setTimeout(() => setManualSyncStatus('idle'), 2000);
       return 'success';
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
+      const msg = String(err?.message || '');
+      if (msg.includes('403') || msg.includes('insufficient') || msg.includes('PERMISSION_DENIED')) {
+        localStorage.removeItem('googleAccessToken');
+        const retryToken = await ensureCalendarAccessToken(true);
+        if (retryToken) {
+          const calendarName = localStorage.getItem('googleCalendarName') || '注文管理アプリ';
+          let calendarId = localStorage.getItem('googleCalendarId') || '';
+          if (!calendarId) {
+            calendarId = await ensureCalendarId({
+              accessToken: retryToken,
+              calendarId: '',
+              calendarName,
+            });
+            if (calendarId) localStorage.setItem('googleCalendarId', calendarId);
+          }
+          await syncShippingOrdersToGoogleCalendar({
+            accessToken: retryToken,
+            orders,
+            customers,
+            products,
+            calendarId: calendarId || 'primary',
+          });
+          setManualSyncStatus('success');
+          setTimeout(() => setManualSyncStatus('idle'), 2000);
+          return 'success';
+        }
+      }
       setManualSyncStatus('error');
       setTimeout(() => setManualSyncStatus('idle'), 2500);
       return 'error';
