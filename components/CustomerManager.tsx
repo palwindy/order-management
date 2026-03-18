@@ -28,6 +28,13 @@ const CustomerManager: React.FC<Props> = ({ customers, setCustomers }) => {
   const [isSearchingAddress, setIsSearchingAddress] = useState(false);
   const [zipError, setZipError] = useState<string | null>(null);
 
+  const handleEnterBlur = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      (e.currentTarget as HTMLElement).blur();
+    }
+  };
+
   const filteredCustomers = sortCustomersById(
     customers.filter(c => 
       c.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
@@ -129,6 +136,7 @@ const CustomerManager: React.FC<Props> = ({ customers, setCustomers }) => {
             className="w-full pl-10 pr-4 py-2 border border-slate-100 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 transition-all bg-slate-50 outline-none"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
+            onKeyDown={handleEnterBlur}
           />
         </div>
         <button
@@ -188,27 +196,27 @@ const CustomerManager: React.FC<Props> = ({ customers, setCustomers }) => {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-3.5">
                 <div className="md:col-span-2">
                   <label className="block text-xs font-bold text-slate-400 mb-1">会社名</label>
-                  <input name="company" defaultValue={editingCustomer?.company} required className="w-full px-4 py-2 bg-slate-50 border border-slate-100 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all" />
+                  <input name="company" defaultValue={editingCustomer?.company} required onKeyDown={handleEnterBlur} className="w-full px-4 py-2 bg-slate-50 border border-slate-100 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all" />
                 </div>
                 
                 <div className="md:col-span-2">
                   <label className="block text-xs font-bold text-slate-400 mb-1">担当者名</label>
-                  <input name="name" defaultValue={editingCustomer?.name} className="w-full px-4 py-2 bg-slate-50 border border-slate-100 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all" />
+                  <input name="name" defaultValue={editingCustomer?.name} onKeyDown={handleEnterBlur} className="w-full px-4 py-2 bg-slate-50 border border-slate-100 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all" />
                 </div>
                 
                 <div className="md:col-span-2">
                   <label className="block text-xs font-bold text-slate-400 mb-1">メールアドレス</label>
-                  <input name="email" type="email" defaultValue={editingCustomer?.email} className="w-full px-4 py-2 bg-slate-50 border border-slate-100 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all" />
+                  <input name="email" type="email" defaultValue={editingCustomer?.email} onKeyDown={handleEnterBlur} className="w-full px-4 py-2 bg-slate-50 border border-slate-100 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all" />
                 </div>
 
                 <div>
                   <label className="block text-xs font-bold text-slate-400 mb-1">電話番号</label>
-                  <input name="phone" defaultValue={editingCustomer?.phone} className="w-full px-4 py-2 bg-slate-50 border border-slate-100 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all" />
+                  <input name="phone" type="tel" inputMode="numeric" enterKeyHint="done" defaultValue={editingCustomer?.phone} onKeyDown={handleEnterBlur} className="w-full px-4 py-2 bg-slate-50 border border-slate-100 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all" />
                 </div>
                 
                 <div>
                   <label className="block text-xs font-bold text-slate-400 mb-1">FAX番号</label>
-                  <input name="fax" defaultValue={editingCustomer?.fax} className="w-full px-4 py-2 bg-slate-50 border border-slate-100 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all" />
+                  <input name="fax" type="tel" inputMode="numeric" enterKeyHint="done" defaultValue={editingCustomer?.fax} onKeyDown={handleEnterBlur} className="w-full px-4 py-2 bg-slate-50 border border-slate-100 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all" />
                 </div>
 
                 <div className="md:col-span-2">
@@ -218,6 +226,10 @@ const CustomerManager: React.FC<Props> = ({ customers, setCustomers }) => {
                       <input 
                         value={zipInput} 
                         onChange={(e) => handleZipChange(e.target.value)}
+                        onKeyDown={handleEnterBlur}
+                        type="tel"
+                        inputMode="numeric"
+                        enterKeyHint="done"
                         placeholder="000-0000"
                         className={`w-full px-4 py-2 bg-slate-50 border rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all ${zipError ? 'border-red-300' : 'border-slate-100'}`} 
                       />
@@ -240,6 +252,7 @@ const CustomerManager: React.FC<Props> = ({ customers, setCustomers }) => {
                   <input 
                     value={addressInput}
                     onChange={(e) => setAddressInput(e.target.value)}
+                    onKeyDown={handleEnterBlur}
                     className="w-full px-4 py-2 bg-slate-50 border border-slate-100 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all" 
                   />
                 </div>
@@ -250,6 +263,7 @@ const CustomerManager: React.FC<Props> = ({ customers, setCustomers }) => {
                     name="notes" 
                     rows={2} 
                     defaultValue={editingCustomer?.notes} 
+                    onKeyDown={handleEnterBlur}
                     className="w-full px-4 py-2 bg-slate-50 border border-slate-100 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all resize-none"
                     placeholder="特記事項..."
                   ></textarea>

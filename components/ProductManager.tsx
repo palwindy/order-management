@@ -29,6 +29,13 @@ const ProductManager: React.FC<Props> = ({ products, setProducts, orders }) => {
   const [stockValue, setStockValue] = useState('');
   const [isFocusingStock, setIsFocusingStock] = useState(false);
 
+  const handleEnterBlur = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      (e.currentTarget as HTMLElement).blur();
+    }
+  };
+
   useEffect(() => {
     if (isModalOpen) {
       if (editingProduct) {
@@ -110,6 +117,7 @@ const ProductManager: React.FC<Props> = ({ products, setProducts, orders }) => {
             className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-100 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
+            onKeyDown={handleEnterBlur}
           />
         </div>
         <button
@@ -200,7 +208,7 @@ const ProductManager: React.FC<Props> = ({ products, setProducts, orders }) => {
             <form onSubmit={handleSave} className="p-8 space-y-5">
               <div>
                 <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">商品名称</label>
-                <input name="name" defaultValue={editingProduct?.name} required className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all" />
+                <input name="name" defaultValue={editingProduct?.name} required onKeyDown={handleEnterBlur} className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all" />
               </div>
               <div>
                 <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">
@@ -210,6 +218,7 @@ const ProductManager: React.FC<Props> = ({ products, setProducts, orders }) => {
                   name="category"
                   defaultValue={editingProduct?.category || DEFAULT_CATEGORY}
                   required
+                  onKeyDown={handleEnterBlur}
                   className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
                 >
                   <option value="">カテゴリーを選択してください</option>
@@ -223,10 +232,13 @@ const ProductManager: React.FC<Props> = ({ products, setProducts, orders }) => {
                 <input 
                   name="stock"
                   type="text" 
+                  inputMode="numeric"
+                  enterKeyHint="done"
                   value={isFocusingStock ? stockValue : (stockValue === '' ? '' : Number(stockValue).toLocaleString())}
                   onFocus={() => setIsFocusingStock(true)}
                   onBlur={() => setIsFocusingStock(false)}
                   onChange={(e) => setStockValue(e.target.value.replace(/,/g, ''))}
+                  onKeyDown={handleEnterBlur}
                   required 
                   className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all" 
                 />

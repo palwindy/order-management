@@ -110,6 +110,7 @@ const OrderEditModal: React.FC<Props> = ({ isOpen, onClose, editingOrder, custom
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') {
       e.preventDefault();
+      (e.currentTarget as HTMLElement).blur();
     }
   };
 
@@ -230,6 +231,7 @@ const OrderEditModal: React.FC<Props> = ({ isOpen, onClose, editingOrder, custom
                             value={item.productId}
                             onChange={(e) => updateItem(idx, 'productId', e.target.value)}
                             placeholder="商品名を直接入力"
+                            onKeyDown={handleKeyDown}
                             className="w-full px-2 sm:px-3 py-2 sm:py-2.5 bg-white border border-slate-200 rounded-xl text-xs sm:text-sm font-bold focus:ring-2 focus:ring-indigo-500 outline-none text-slate-900"
                           />
                           <button
@@ -267,6 +269,8 @@ const OrderEditModal: React.FC<Props> = ({ isOpen, onClose, editingOrder, custom
                       <label className="block text-[8px] sm:text-[9px] font-black text-slate-400 mb-1.5 uppercase tracking-wider">数量</label>
                       <input 
                         type="text" 
+                        inputMode="numeric"
+                        enterKeyHint="done"
                         value={focusedCell === `${idx}-quantity` ? item.quantity : (item.quantity === '' ? '' : Number(item.quantity).toLocaleString())}
                         onFocus={() => setFocusedCell(`${idx}-quantity`)}
                         onBlur={(e) => {
@@ -283,6 +287,8 @@ const OrderEditModal: React.FC<Props> = ({ isOpen, onClose, editingOrder, custom
                       <label className="block text-[8px] sm:text-[9px] font-black text-slate-400 mb-1.5 uppercase tracking-wider">単価</label>
                       <input 
                         type="text" 
+                        inputMode="numeric"
+                        enterKeyHint="done"
                         value={focusedCell === `${idx}-unitPrice` ? item.unitPrice : (item.unitPrice === '' ? '' : `¥${Number(item.unitPrice).toLocaleString()}`)}
                         onFocus={() => setFocusedCell(`${idx}-unitPrice`)}
                         onBlur={(e) => {
@@ -318,6 +324,7 @@ const OrderEditModal: React.FC<Props> = ({ isOpen, onClose, editingOrder, custom
                         setShippingDateVal(next);
                       }
                     }}
+                    onKeyDown={handleKeyDown}
                     className="flex-1 px-4 sm:px-5 py-3 sm:py-4 bg-slate-50 border border-slate-100 rounded-2xl text-sm sm:text-base font-bold focus:ring-4 focus:ring-indigo-500/10 outline-none transition-all hover:bg-slate-100 text-slate-900"
                   >
                     <option value="__undecided">出荷日未定</option>
@@ -357,6 +364,7 @@ const OrderEditModal: React.FC<Props> = ({ isOpen, onClose, editingOrder, custom
                         setDeliveryDateVal(next);
                       }
                     }}
+                    onKeyDown={handleKeyDown}
                     className="flex-1 px-4 sm:px-5 py-3 sm:py-4 bg-slate-50 border border-slate-100 rounded-2xl text-sm sm:text-base font-bold focus:ring-4 focus:ring-indigo-500/10 outline-none transition-all hover:bg-slate-100 text-slate-900"
                   >
                     <option value="__undecided">納品日未定</option>
@@ -410,6 +418,7 @@ const OrderEditModal: React.FC<Props> = ({ isOpen, onClose, editingOrder, custom
               <textarea
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
+                onKeyDown={handleKeyDown}
                 rows={3}
                 placeholder="備考があれば入力してください"
                 className="w-full px-4 sm:px-5 py-3 sm:py-4 bg-slate-50 border border-slate-100 rounded-2xl text-sm font-bold focus:ring-4 focus:ring-indigo-500/10 outline-none transition-all hover:bg-slate-100 text-slate-900 resize-none"
