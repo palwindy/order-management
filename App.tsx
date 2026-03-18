@@ -33,7 +33,7 @@ import toast, { Toaster } from 'react-hot-toast';
 import { getAuth, GoogleAuthProvider, signInWithEmailAndPassword, onAuthStateChanged, signOut, getRedirectResult, reauthenticateWithPopup, reauthenticateWithRedirect } from 'firebase/auth';
 import { syncShippingOrdersToGoogleCalendar, ensureCalendarId } from './googleCalendar';
 
-const APP_VERSION = "Ver.2.04";
+const APP_VERSION = "Ver.2.05";
 const COMPANY_NAME = "注文管理システム";
 const ADMIN_EMAIL = "admin@chumon-kanri.com";
 
@@ -406,7 +406,7 @@ const App: React.FC = () => {
     } catch (err: any) {
       console.error(err);
       const msg = String(err?.message || '');
-      if (msg.includes('403') || msg.includes('insufficient') || msg.includes('PERMISSION_DENIED')) {
+      if (msg.includes('403') || msg.includes('insufficient') || msg.includes('PERMISSION_DENIED') || msg.includes('401') || msg.includes('UNAUTHENTICATED')) {
         localStorage.removeItem('googleAccessToken');
         const retryToken = await ensureCalendarAccessToken(true);
         if (retryToken) {
