@@ -35,6 +35,9 @@ const CalendarSettings: React.FC<Props> = ({ isOpen, onClose, orders, customers,
   const [calendarId, setCalendarId] = useState<string>(
     localStorage.getItem('googleCalendarId') || ''
   );
+  const [needsReauth, setNeedsReauth] = useState<boolean>(
+    localStorage.getItem('calendarNeedsReauth') === '1'
+  );
 
   useEffect(() => {
     if (isOpen) {
@@ -46,6 +49,7 @@ const CalendarSettings: React.FC<Props> = ({ isOpen, onClose, orders, customers,
       setPendingToken('');
       setCalendarName(savedCalendarName);
       setCalendarId(savedCalendarId);
+      setNeedsReauth(localStorage.getItem('calendarNeedsReauth') === '1');
 
       const auth = getAuth();
       const user = auth.currentUser;
@@ -241,7 +245,7 @@ const CalendarSettings: React.FC<Props> = ({ isOpen, onClose, orders, customers,
   };
 
   const isLinked = pendingEmail !== '' && pendingEmail === connectedEmail && !!calendarId;
-  const canSave = pendingEmail !== '' && !isLinked && syncStatus === 'idle';
+  const canSave = pendingEmail !== '' && (!isLinked || needsReauth) && syncStatus === 'idle';
 
   const handleSave = async () => {
     if (!canSave) return;
@@ -354,6 +358,8 @@ const CalendarSettings: React.FC<Props> = ({ isOpen, onClose, orders, customers,
       setConnectedEmail(pendingEmail);
       setPendingEmail('');
       setPendingToken('');
+      localStorage.removeItem('calendarNeedsReauth');
+      setNeedsReauth(false);
       setSyncStatus('success');
       setTimeout(() => setSyncStatus('idle'), 2000);
     } catch (err: any) {
@@ -370,6 +376,10 @@ const CalendarSettings: React.FC<Props> = ({ isOpen, onClose, orders, customers,
       if (msg.includes('404') || msg.includes('Not Found')) {
         localStorage.removeItem('googleCalendarId');
         setCalendarId('');
+      }
+      if (msg.includes('401') || msg.includes('UNAUTHENTICATED') || msg.includes('403') || msg.includes('insufficient') || msg.includes('PERMISSION_DENIED')) {
+        localStorage.setItem('calendarNeedsReauth', '1');
+        setNeedsReauth(true);
       }
       alert(err?.message || 'カレンダー連携に失敗しました。');
       setSyncStatus('error');
@@ -427,8 +437,11 @@ const CalendarSettings: React.FC<Props> = ({ isOpen, onClose, orders, customers,
                   {pendingEmail && !isLinked && (
                     <p className="text-[10px] text-orange-500 font-bold">(未連携・保存してください)</p>
                   )}
-                  {isLinked && (
+                  {isLinked && !needsReauth && (
                      <p className="text-[10px] text-emerald-500 font-bold">(連携済み)</p>
+                  )}
+                  {isLinked && needsReauth && (
+                     <p className="text-[10px] text-amber-600 font-bold">(再認証が必要)</p>
                   )}
               </div>
             </button>

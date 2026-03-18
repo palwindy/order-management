@@ -33,7 +33,7 @@ import toast, { Toaster } from 'react-hot-toast';
 import { getAuth, GoogleAuthProvider, signInWithEmailAndPassword, onAuthStateChanged, signOut, getRedirectResult, reauthenticateWithPopup, reauthenticateWithRedirect } from 'firebase/auth';
 import { syncShippingOrdersToGoogleCalendar, ensureCalendarId } from './googleCalendar';
 
-const APP_VERSION = "Ver.2.05";
+const APP_VERSION = "Ver.2.06";
 const COMPANY_NAME = "注文管理システム";
 const ADMIN_EMAIL = "admin@chumon-kanri.com";
 
@@ -371,14 +371,20 @@ const App: React.FC = () => {
     }
   };
 
-  const runCalendarSync = async (): Promise<'success' | 'error'> => {
-    setManualSyncStatus('syncing');
+  const runCalendarSync = async (mode: 'manual' | 'silent' = 'manual'): Promise<'success' | 'error' | 'skipped'> => {
+    const isManual = mode === 'manual';
+    if (isManual) setManualSyncStatus('syncing');
     try {
       let accessToken = await ensureCalendarAccessToken(false);
       if (!accessToken) {
-        setManualSyncStatus('error');
-        setTimeout(() => setManualSyncStatus('idle'), 2000);
-        return 'error';
+        if (isManual) {
+          setManualSyncStatus('error');
+          setTimeout(() => setManualSyncStatus('idle'), 2000);
+          localStorage.setItem('calendarNeedsReauth', '1');
+          return 'error';
+        }
+        localStorage.setItem('calendarNeedsReauth', '1');
+        return 'skipped';
       }
 
       const calendarName = localStorage.getItem('googleCalendarName') || '注文管理アプリ';
@@ -400,41 +406,52 @@ const App: React.FC = () => {
         calendarId: calendarId || 'primary',
       });
 
-      setManualSyncStatus('success');
-      setTimeout(() => setManualSyncStatus('idle'), 2000);
+      localStorage.removeItem('calendarNeedsReauth');
+      if (isManual) {
+        setManualSyncStatus('success');
+        setTimeout(() => setManualSyncStatus('idle'), 2000);
+      }
       return 'success';
     } catch (err: any) {
       console.error(err);
       const msg = String(err?.message || '');
-      if (msg.includes('403') || msg.includes('insufficient') || msg.includes('PERMISSION_DENIED') || msg.includes('401') || msg.includes('UNAUTHENTICATED')) {
+      const isAuthError = msg.includes('403') || msg.includes('insufficient') || msg.includes('PERMISSION_DENIED') || msg.includes('401') || msg.includes('UNAUTHENTICATED');
+      if (isAuthError) {
         localStorage.removeItem('googleAccessToken');
-        const retryToken = await ensureCalendarAccessToken(true);
-        if (retryToken) {
-          const calendarName = localStorage.getItem('googleCalendarName') || '注文管理アプリ';
-          let calendarId = localStorage.getItem('googleCalendarId') || '';
-          if (!calendarId) {
-            calendarId = await ensureCalendarId({
+        localStorage.setItem('calendarNeedsReauth', '1');
+        if (isManual) {
+          const retryToken = await ensureCalendarAccessToken(true);
+          if (retryToken) {
+            const calendarName = localStorage.getItem('googleCalendarName') || '注文管理アプリ';
+            let calendarId = localStorage.getItem('googleCalendarId') || '';
+            if (!calendarId) {
+              calendarId = await ensureCalendarId({
+                accessToken: retryToken,
+                calendarId: '',
+                calendarName,
+              });
+              if (calendarId) localStorage.setItem('googleCalendarId', calendarId);
+            }
+            await syncShippingOrdersToGoogleCalendar({
               accessToken: retryToken,
-              calendarId: '',
-              calendarName,
+              orders,
+              customers,
+              products,
+              calendarId: calendarId || 'primary',
             });
-            if (calendarId) localStorage.setItem('googleCalendarId', calendarId);
+            localStorage.removeItem('calendarNeedsReauth');
+            setManualSyncStatus('success');
+            setTimeout(() => setManualSyncStatus('idle'), 2000);
+            return 'success';
           }
-          await syncShippingOrdersToGoogleCalendar({
-            accessToken: retryToken,
-            orders,
-            customers,
-            products,
-            calendarId: calendarId || 'primary',
-          });
-          setManualSyncStatus('success');
-          setTimeout(() => setManualSyncStatus('idle'), 2000);
-          return 'success';
         }
       }
-      setManualSyncStatus('error');
-      setTimeout(() => setManualSyncStatus('idle'), 2500);
-      return 'error';
+      if (isManual) {
+        setManualSyncStatus('error');
+        setTimeout(() => setManualSyncStatus('idle'), 2500);
+        return 'error';
+      }
+      return 'skipped';
     }
   };
   
@@ -470,13 +487,13 @@ const App: React.FC = () => {
     }
 
     setIsOrderModalOpen(false);
-    await runCalendarSync();
+    await runCalendarSync('silent');
   };
   
   const handleDeleteOrder = async (orderId: string) => {
     setOrdersFS(prev => prev.filter(o => o.id !== orderId));
     setIsOrderModalOpen(false);
-    await runCalendarSync();
+    await runCalendarSync('silent');
   };
   
   const handleShipOrder = async (orderId: string) => {
@@ -505,7 +522,7 @@ const App: React.FC = () => {
       if(productUpdated) {
           setProducts(updatedProducts);
       }
-      await runCalendarSync();
+      await runCalendarSync('silent');
   };
 
   const navItems: { id: TabId; label: string; icon: React.ElementType }[] = [
@@ -1105,7 +1122,7 @@ const App: React.FC = () => {
           {activeTab === 'calendar' && (
             <div className="flex items-center gap-2">
               <button
-                onClick={runCalendarSync}
+                onClick={() => runCalendarSync('manual')}
                 className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all ${
                   manualSyncStatus === 'syncing' ? 'bg-slate-200 text-slate-500 cursor-not-allowed' :
                   manualSyncStatus === 'error'   ? 'bg-red-500 text-white' :
@@ -1154,7 +1171,7 @@ const App: React.FC = () => {
         orders={orders}
         customers={customers}
         products={products}
-        onSync={runCalendarSync}
+        onSync={() => runCalendarSync('silent')}
         onClose={() => setIsCalendarSettingsOpen(false)}
       />
 
