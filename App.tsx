@@ -33,7 +33,7 @@ import toast, { Toaster } from 'react-hot-toast';
 import { getAuth, GoogleAuthProvider, signInWithEmailAndPassword, onAuthStateChanged, signOut, getRedirectResult, reauthenticateWithPopup, reauthenticateWithRedirect } from 'firebase/auth';
 import { syncShippingOrdersToGoogleCalendar, ensureCalendarId } from './googleCalendar';
 
-const APP_VERSION = "Ver.2.08";
+const APP_VERSION = "Ver.2.09";
 const COMPANY_NAME = "注文管理システム";
 const ADMIN_EMAIL = "admin@chumon-kanri.com";
 
