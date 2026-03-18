@@ -20,10 +20,11 @@ interface Props {
   orders: Order[];
   customers: Customer[];
   products: Product[];
+  onSync?: () => Promise<'success' | 'error'>;
   onClose: () => void;
 }
 
-const CalendarSettings: React.FC<Props> = ({ isOpen, onClose, orders, customers, products }) => {
+const CalendarSettings: React.FC<Props> = ({ isOpen, onClose, orders, customers, products, onSync }) => {
   const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'success' | 'error'>('idle');
   const [connectedEmail, setConnectedEmail] = useState<string>('');
   const [pendingEmail, setPendingEmail] = useState<string>('');
@@ -347,6 +348,8 @@ const CalendarSettings: React.FC<Props> = ({ isOpen, onClose, orders, customers,
           throw err;
         }
       }
+
+      if (onSync) await onSync();
 
       setConnectedEmail(pendingEmail);
       setPendingEmail('');

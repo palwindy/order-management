@@ -31,8 +31,9 @@ import { db } from './firebase';
 import { collection, doc, setDoc, deleteDoc, getDocs, writeBatch, addDoc, query, orderBy, onSnapshot } from 'firebase/firestore';
 import toast, { Toaster } from 'react-hot-toast';
 import { getAuth, GoogleAuthProvider, signInWithEmailAndPassword, onAuthStateChanged, signOut, getRedirectResult } from 'firebase/auth';
+import { syncShippingOrdersToGoogleCalendar } from './googleCalendar';
 
-const APP_VERSION = "Ver.2.02";
+const APP_VERSION = "Ver.2.03";
 const COMPANY_NAME = "注文管理システム";
 const ADMIN_EMAIL = "admin@chumon-kanri.com";
 
@@ -69,6 +70,7 @@ const App: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [isOrderModalOpen, setIsOrderModalOpen] = useState(false);
   const [isCalendarSettingsOpen, setIsCalendarSettingsOpen] = useState(false);
+  const [manualSyncStatus, setManualSyncStatus] = useState<'idle' | 'syncing' | 'success' | 'error'>('idle');
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
 
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -336,6 +338,37 @@ const App: React.FC = () => {
     setSelectedOrder(order);
     setIsOrderModalOpen(true);
   };
+
+  const runCalendarSync = async (): Promise<'success' | 'error'> => {
+    const accessToken = localStorage.getItem('googleAccessToken') || '';
+    const calendarId = localStorage.getItem('googleCalendarId') || '';
+    const calendarName = localStorage.getItem('googleCalendarName') || '注文管理アプリ';
+
+    if (!accessToken || !calendarId) {
+      setManualSyncStatus('error');
+      setTimeout(() => setManualSyncStatus('idle'), 2000);
+      return 'error';
+    }
+
+    try {
+      setManualSyncStatus('syncing');
+      await syncShippingOrdersToGoogleCalendar({
+        accessToken,
+        orders,
+        customers,
+        products,
+        calendarId,
+      });
+      setManualSyncStatus('success');
+      setTimeout(() => setManualSyncStatus('idle'), 2000);
+      return 'success';
+    } catch (err) {
+      console.error(err);
+      setManualSyncStatus('error');
+      setTimeout(() => setManualSyncStatus('idle'), 2500);
+      return 'error';
+    }
+  };
   
   const handleSaveOrder = async (newOrder: Order) => {
     const prevOrder = orders.find(o => o.id === newOrder.id);
@@ -369,11 +402,13 @@ const App: React.FC = () => {
     }
 
     setIsOrderModalOpen(false);
+    await runCalendarSync();
   };
   
   const handleDeleteOrder = async (orderId: string) => {
     setOrdersFS(prev => prev.filter(o => o.id !== orderId));
     setIsOrderModalOpen(false);
+    await runCalendarSync();
   };
   
   const handleShipOrder = async (orderId: string) => {
@@ -402,6 +437,7 @@ const App: React.FC = () => {
       if(productUpdated) {
           setProducts(updatedProducts);
       }
+      await runCalendarSync();
   };
 
   const navItems: { id: TabId; label: string; icon: React.ElementType }[] = [
@@ -999,13 +1035,26 @@ const App: React.FC = () => {
             </div>
           )}
           {activeTab === 'calendar' && (
-            <button
-              onClick={() => setIsCalendarSettingsOpen(true)}
-              className="p-2 rounded-xl hover:bg-slate-100 text-slate-400 hover:text-indigo-600 transition-all"
-              title="カレンダー設定"
-            >
-              <Settings className="w-5 h-5" />
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={runCalendarSync}
+                className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all ${
+                  manualSyncStatus === 'syncing' ? 'bg-slate-200 text-slate-500 cursor-not-allowed' :
+                  manualSyncStatus === 'error'   ? 'bg-red-500 text-white' :
+                  'bg-indigo-600 text-white hover:bg-indigo-700'
+                }`}
+                title="同期"
+              >
+                {manualSyncStatus === 'syncing' ? '同期中...' : manualSyncStatus === 'error' ? '同期失敗' : '同期'}
+              </button>
+              <button
+                onClick={() => setIsCalendarSettingsOpen(true)}
+                className="p-2 rounded-xl hover:bg-slate-100 text-slate-400 hover:text-indigo-600 transition-all"
+                title="カレンダー設定"
+              >
+                <Settings className="w-5 h-5" />
+              </button>
+            </div>
           )}
         </header>
 
@@ -1037,6 +1086,7 @@ const App: React.FC = () => {
         orders={orders}
         customers={customers}
         products={products}
+        onSync={runCalendarSync}
         onClose={() => setIsCalendarSettingsOpen(false)}
       />
 
