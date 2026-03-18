@@ -33,7 +33,7 @@ import toast, { Toaster } from 'react-hot-toast';
 import { getAuth, GoogleAuthProvider, signInWithEmailAndPassword, onAuthStateChanged, signOut, getRedirectResult, reauthenticateWithPopup, reauthenticateWithRedirect } from 'firebase/auth';
 import { syncShippingOrdersToGoogleCalendar, ensureCalendarId } from './googleCalendar';
 
-const APP_VERSION = "Ver.2.11";
+const APP_VERSION = "Ver.2.12";
 const COMPANY_NAME = "注文管理システム";
 const ADMIN_EMAIL = "admin@chumon-kanri.com";
 
@@ -87,6 +87,10 @@ const App: React.FC = () => {
   const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false);
   const [showLogModal, setShowLogModal] = useState(false);
   const [accessLogs, setAccessLogs] = useState<any[]>([]);
+
+  const isCalendarLinked =
+    !!localStorage.getItem('googleAccessToken') &&
+    localStorage.getItem('calendarNeedsReauth') !== '1';
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -368,7 +372,8 @@ const App: React.FC = () => {
 
   const ensureCalendarAccessToken = async (
     forceReauth: boolean = false,
-    intent: 'settings' | 'sync' = 'sync'
+    intent: 'settings' | 'sync' = 'sync',
+    allowInteractive: boolean = true
   ): Promise<string | null> => {
     const cached = localStorage.getItem('googleAccessToken') || '';
     if (cached && !forceReauth) return cached;
@@ -386,6 +391,9 @@ const App: React.FC = () => {
     const redirectInflight = sessionStorage.getItem('calendar_oauth_inflight') === '1';
 
     try {
+      if (!allowInteractive) {
+        return null;
+      }
       if (preferRedirect) {
         if (redirectInflight) return null;
         if (intent === 'sync' && redirectNoToken) return null;
@@ -415,7 +423,7 @@ const App: React.FC = () => {
     const isManual = mode === 'manual';
     if (isManual) setManualSyncStatus('syncing');
     try {
-      let accessToken = await ensureCalendarAccessToken(false, 'sync');
+      let accessToken = await ensureCalendarAccessToken(false, 'sync', false);
       if (!accessToken) {
         if (isManual) {
           setManualSyncStatus('error');
@@ -460,7 +468,7 @@ const App: React.FC = () => {
         localStorage.removeItem('googleAccessToken');
         localStorage.setItem('calendarNeedsReauth', '1');
         if (isManual) {
-          const retryToken = await ensureCalendarAccessToken(true, 'sync');
+          const retryToken = await ensureCalendarAccessToken(true, 'sync', false);
           if (retryToken) {
             const calendarName = localStorage.getItem('googleCalendarName') || '注文管理アプリ';
             let calendarId = localStorage.getItem('googleCalendarId') || '';
@@ -1162,15 +1170,26 @@ const App: React.FC = () => {
           {activeTab === 'calendar' && (
             <div className="flex items-center gap-2">
               <button
-                onClick={() => runCalendarSync('manual')}
+                onClick={() => {
+                  if (!isCalendarLinked || manualSyncStatus === 'syncing') return;
+                  runCalendarSync('manual');
+                }}
+                disabled={!isCalendarLinked || manualSyncStatus === 'syncing'}
                 className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all ${
+                  !isCalendarLinked ? 'bg-slate-200 text-slate-500 cursor-not-allowed' :
                   manualSyncStatus === 'syncing' ? 'bg-slate-200 text-slate-500 cursor-not-allowed' :
                   manualSyncStatus === 'error'   ? 'bg-red-500 text-white' :
                   'bg-indigo-600 text-white hover:bg-indigo-700'
                 }`}
                 title="同期"
               >
-                {manualSyncStatus === 'syncing' ? '同期中...' : manualSyncStatus === 'error' ? '同期失敗' : '同期'}
+                {!isCalendarLinked
+                  ? '未連携'
+                  : manualSyncStatus === 'syncing'
+                    ? '同期中...'
+                    : manualSyncStatus === 'error'
+                      ? '同期失敗'
+                      : '同期'}
               </button>
               <button
                 onClick={() => setIsCalendarSettingsOpen(true)}
