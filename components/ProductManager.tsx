@@ -1,7 +1,7 @@
 ﻿import React, { useState, useMemo, useEffect } from 'react';
 import { Product, Order } from '../types';
-import { CATEGORIES, CATEGORY_PREFIX, DEFAULT_CATEGORY } from '../constants';
-import { PackagePlus, Trash2, Edit3 } from 'lucide-react';
+import { CATEGORIES, CATEGORY_PREFIX } from '../constants';
+import { PackagePlus, Trash2, Edit3, AlertTriangle } from 'lucide-react';
 
 interface Props {
   products: Product[];
@@ -9,24 +9,38 @@ interface Props {
   orders: Order[];
 }
 
+const DEFAULT_TAB = '裏白';
+
 const generateProductId = (products: Product[], category: string): string => {
   const prefix = CATEGORY_PREFIX[category] || 'Z';
   const numbers = products
     .filter(p => p.id.startsWith(prefix))
     .map(p => {
-      const match = p.id.match(new RegExp(`^${prefix}(\d+)$`, 'i'));
+      const match = p.id.match(new RegExp(`^${prefix}(\\d+)$`, 'i'));
       return match ? parseInt(match[1], 10) : 0;
-    });
-  const max = numbers.length > 0 ? Math.max(...numbers) : 0;
-  return `${prefix}${String(max + 1).padStart(3, '0')}`;
+    })
+    .filter(n => n > 0)
+    .sort((a, b) => a - b);
+
+  let nextNum = 1;
+  for (const num of numbers) {
+    if (num === nextNum) {
+      nextNum++;
+    } else if (num > nextNum) {
+      break;
+    }
+  }
+  return `${prefix}${String(nextNum).padStart(3, '0')}`;
 };
 
 const ProductManager: React.FC<Props> = ({ products, setProducts, orders }) => {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [name, setName] = useState('');
   const [stock, setStock] = useState<string>('');
-  const [activeTab, setActiveTab] = useState<string>(DEFAULT_CATEGORY);
-  const [category, setCategory] = useState<string>(DEFAULT_CATEGORY);
+  const [activeTab, setActiveTab] = useState<string>(DEFAULT_TAB);
+  const [category, setCategory] = useState<string>(DEFAULT_TAB);
+  const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
+  const [deletingProduct, setDeletingProduct] = useState<Product | null>(null);
 
   useEffect(() => {
     if (!editingId) {
@@ -45,12 +59,12 @@ const ProductManager: React.FC<Props> = ({ products, setProducts, orders }) => {
   }, [orders]);
 
   const filteredProducts = useMemo(() => {
-    return products.filter(p => (p.category || DEFAULT_CATEGORY) === activeTab);
+    return products.filter(p => (p.category || DEFAULT_TAB) === activeTab);
   }, [products, activeTab]);
 
   const nextAvailableId = useMemo(() => {
-    return generateProductId(products, category || DEFAULT_CATEGORY);
-  }, [products, category]);
+    return generateProductId(products, activeTab);
+  }, [products, activeTab]);
 
   const handleSelectProduct = (product: Product) => {
     setEditingId(product.id);
@@ -88,10 +102,16 @@ const ProductManager: React.FC<Props> = ({ products, setProducts, orders }) => {
 
   const handleDelete = (e: React.MouseEvent, product: Product) => {
     e.stopPropagation();
-    const ok = window.confirm(`「${product.name}」を削除してもよろしいですか？`);
-    if (!ok) return;
-    setProducts(prev => prev.filter(p => p.id !== product.id));
-    if (editingId === product.id) resetForm();
+    setDeletingProduct(product);
+    setIsDeleteConfirmOpen(true);
+  };
+
+  const confirmDelete = () => {
+    if (!deletingProduct) return;
+    setProducts(prev => prev.filter(p => p.id !== deletingProduct.id));
+    if (editingId === deletingProduct.id) resetForm();
+    setDeletingProduct(null);
+    setIsDeleteConfirmOpen(false);
   };
 
   const isSubmitDisabled = !name.trim();
@@ -226,6 +246,36 @@ const ProductManager: React.FC<Props> = ({ products, setProducts, orders }) => {
           </div>
         )}
       </div>
+
+      {isDeleteConfirmOpen && (
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-md flex items-center justify-center z-[60] p-4">
+          <div className="bg-white rounded-3xl w-full max-w-sm shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+            <div className="p-8 text-center">
+              <div className="w-16 h-16 bg-red-50 rounded-full flex items-center justify-center mx-auto mb-4">
+                <AlertTriangle className="w-8 h-8 text-red-500" />
+              </div>
+              <h4 className="text-lg font-black text-slate-900 mb-2">商品を削除しますか？</h4>
+              <p className="text-xs text-slate-500 leading-relaxed mb-6 px-4">
+                「{deletingProduct?.name}」を削除すると元に戻せません。
+              </p>
+              <div className="flex flex-col gap-2">
+                <button
+                  onClick={confirmDelete}
+                  className="w-full py-3 bg-red-600 text-white rounded-xl font-black text-sm hover:bg-red-700 transition-all shadow-md active:scale-95"
+                >
+                  削除を実行する
+                </button>
+                <button
+                  onClick={() => { setIsDeleteConfirmOpen(false); setDeletingProduct(null); }}
+                  className="w-full py-3 bg-slate-100 text-slate-600 rounded-xl font-bold text-sm hover:bg-slate-200 transition-all"
+                >
+                  キャンセル
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
