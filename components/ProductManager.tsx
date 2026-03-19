@@ -188,12 +188,12 @@ const ProductManager: React.FC<Props> = ({ products, setProducts, orders }) => {
       </div>
 
       <div className="mt-4 flex-shrink-0 overflow-x-hidden max-w-full">
-        <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide px-1">
+        <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide px-1 max-w-full overscroll-x-contain">
           {CATEGORIES.map((cat) => (
             <button
               key={cat}
               onClick={() => setActiveTab(cat)}
-              className={`px-4 py-2 rounded-full text-[11px] font-black whitespace-nowrap transition-all duration-300 border-2 ${
+              className={`px-4 py-2 rounded-full text-[11px] font-black whitespace-nowrap transition-all duration-300 border-2 flex-shrink-0 ${
                 activeTab === cat
                 ? 'bg-indigo-600 border-indigo-600 text-white shadow-md'
                 : 'bg-white border-slate-100 text-slate-400 hover:border-indigo-200'
