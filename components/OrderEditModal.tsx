@@ -313,7 +313,7 @@ const OrderEditModal: React.FC<Props> = ({ isOpen, onClose, editingOrder, custom
             <div className="grid grid-cols-2 gap-4 sm:gap-6">
               <div>
                 <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-3">出荷日</label>
-                <div className="flex gap-2">
+                <div className="flex gap-2 items-center">
                   <select
                     value={shippingDateVal === '' ? '__undecided' : shippingDateVal}
                     onChange={(e) => {
@@ -325,7 +325,7 @@ const OrderEditModal: React.FC<Props> = ({ isOpen, onClose, editingOrder, custom
                       }
                     }}
                     onKeyDown={handleKeyDown}
-                    className="flex-1 px-4 sm:px-5 py-3 sm:py-4 bg-slate-50 border border-slate-100 rounded-2xl text-sm sm:text-base font-bold focus:ring-4 focus:ring-indigo-500/10 outline-none transition-all hover:bg-slate-100 text-slate-900"
+                    className="flex-1 min-w-0 px-3 sm:px-5 py-2.5 sm:py-4 bg-slate-50 border border-slate-100 rounded-2xl text-xs sm:text-base font-bold focus:ring-4 focus:ring-indigo-500/10 outline-none transition-all hover:bg-slate-100 text-slate-900"
                   >
                     <option value="__undecided">出荷日未定</option>
                     {shippingDateVal !== '' && (
@@ -336,9 +336,9 @@ const OrderEditModal: React.FC<Props> = ({ isOpen, onClose, editingOrder, custom
                     type="button"
                     onClick={() => openDatePicker(shippingDateInputRef)}
                     aria-label="出荷日のカレンダーを開く"
-                    className="px-3 sm:px-4 py-3 sm:py-4 bg-white border border-slate-200 rounded-2xl text-slate-600 hover:bg-slate-50 transition-all flex items-center"
+                    className="shrink-0 px-2.5 sm:px-4 py-2.5 sm:py-4 bg-white border border-slate-200 rounded-2xl text-slate-600 hover:bg-slate-50 transition-all flex items-center"
                   >
-                    <Calendar className="w-4 h-4" />
+                    <Calendar className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                   </button>
                   <input
                     ref={shippingDateInputRef}
@@ -353,7 +353,7 @@ const OrderEditModal: React.FC<Props> = ({ isOpen, onClose, editingOrder, custom
               </div>
               <div>
                 <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-3">納品日</label>
-                <div className="flex gap-2">
+                <div className="flex gap-2 items-center">
                   <select
                     value={deliveryDateVal === '' ? '__undecided' : deliveryDateVal}
                     onChange={(e) => {
@@ -365,7 +365,7 @@ const OrderEditModal: React.FC<Props> = ({ isOpen, onClose, editingOrder, custom
                       }
                     }}
                     onKeyDown={handleKeyDown}
-                    className="flex-1 px-4 sm:px-5 py-3 sm:py-4 bg-slate-50 border border-slate-100 rounded-2xl text-sm sm:text-base font-bold focus:ring-4 focus:ring-indigo-500/10 outline-none transition-all hover:bg-slate-100 text-slate-900"
+                    className="flex-1 min-w-0 px-3 sm:px-5 py-2.5 sm:py-4 bg-slate-50 border border-slate-100 rounded-2xl text-xs sm:text-base font-bold focus:ring-4 focus:ring-indigo-500/10 outline-none transition-all hover:bg-slate-100 text-slate-900"
                   >
                     <option value="__undecided">納品日未定</option>
                     {deliveryDateVal !== '' && (
@@ -376,9 +376,9 @@ const OrderEditModal: React.FC<Props> = ({ isOpen, onClose, editingOrder, custom
                     type="button"
                     onClick={() => openDatePicker(deliveryDateInputRef)}
                     aria-label="納品日のカレンダーを開く"
-                    className="px-3 sm:px-4 py-3 sm:py-4 bg-white border border-slate-200 rounded-2xl text-slate-600 hover:bg-slate-50 transition-all flex items-center"
+                    className="shrink-0 px-2.5 sm:px-4 py-2.5 sm:py-4 bg-white border border-slate-200 rounded-2xl text-slate-600 hover:bg-slate-50 transition-all flex items-center"
                   >
-                    <Calendar className="w-4 h-4" />
+                    <Calendar className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                   </button>
                   <input
                     ref={deliveryDateInputRef}

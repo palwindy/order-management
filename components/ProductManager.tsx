@@ -117,7 +117,7 @@ const ProductManager: React.FC<Props> = ({ products, setProducts, orders }) => {
   const isSubmitDisabled = !name.trim();
 
   return (
-    <div className="flex flex-col h-[calc(100vh-8rem)] animate-in fade-in duration-300">
+    <div className="flex flex-col h-[calc(100vh-8rem)] animate-in fade-in duration-300 overflow-x-hidden">
       <div className="flex-shrink-0">
         <div className={`bg-white rounded-2xl p-4 shadow-sm border transition-all duration-300 ${editingId ? 'border-amber-200 ring-2 ring-amber-50' : 'border-slate-100'}`}>
           <div className="flex justify-between items-center mb-3">
@@ -187,7 +187,7 @@ const ProductManager: React.FC<Props> = ({ products, setProducts, orders }) => {
         </div>
       </div>
 
-      <div className="mt-4 flex-shrink-0">
+      <div className="mt-4 flex-shrink-0 overflow-x-hidden">
         <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide px-1">
           {CATEGORIES.map((cat) => (
             <button
