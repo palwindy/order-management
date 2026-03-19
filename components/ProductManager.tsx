@@ -1,7 +1,7 @@
-import React, { useState, useMemo, useEffect } from 'react';
+﻿import React, { useState, useMemo, useEffect } from 'react';
 import { Product, Order } from '../types';
 import { CATEGORIES, CATEGORY_PREFIX, DEFAULT_CATEGORY } from '../constants';
-import { PackagePlus, Trash2, AlertTriangle } from 'lucide-react';
+import { PackagePlus, Trash2, Edit3 } from 'lucide-react';
 
 interface Props {
   products: Product[];
@@ -22,31 +22,17 @@ const generateProductId = (products: Product[], category: string): string => {
 };
 
 const ProductManager: React.FC<Props> = ({ products, setProducts, orders }) => {
-  const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
-  const [deletingProduct, setDeletingProduct] = useState<Product | null>(null);
-  const [drafts, setDrafts] = useState<Record<string, { name: string; category: string; stock: string }>>({});
-  const [isAdding, setIsAdding] = useState(false);
-  const [newDraft, setNewDraft] = useState({ name: '', category: DEFAULT_CATEGORY, stock: '' });
-
-  const handleEnterBlur = (e: React.KeyboardEvent, onCommit?: () => void) => {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      if (onCommit) onCommit();
-      (e.currentTarget as HTMLElement).blur();
-    }
-  };
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [name, setName] = useState('');
+  const [stock, setStock] = useState<string>('');
+  const [activeTab, setActiveTab] = useState<string>(DEFAULT_CATEGORY);
+  const [category, setCategory] = useState<string>(DEFAULT_CATEGORY);
 
   useEffect(() => {
-    const next: Record<string, { name: string; category: string; stock: string }> = {};
-    products.forEach(p => {
-      next[p.id] = {
-        name: p.name,
-        category: p.category || DEFAULT_CATEGORY,
-        stock: String(p.stock ?? 0),
-      };
-    });
-    setDrafts(next);
-  }, [products]);
+    if (!editingId) {
+      setCategory(activeTab);
+    }
+  }, [activeTab, editingId]);
 
   const pendingCounts = useMemo(() => {
     const counts: Record<string, number> = {};
@@ -58,278 +44,188 @@ const ProductManager: React.FC<Props> = ({ products, setProducts, orders }) => {
     return counts;
   }, [orders]);
 
-  const filteredProducts = products;
+  const filteredProducts = useMemo(() => {
+    return products.filter(p => (p.category || DEFAULT_CATEGORY) === activeTab);
+  }, [products, activeTab]);
 
-  const confirmDelete = () => {
-    if (deletingProduct) {
-      setProducts(prev => prev.filter(p => p.id !== deletingProduct.id));
-      setIsDeleteConfirmOpen(false);
-      setDeletingProduct(null);
-    }
+  const nextAvailableId = useMemo(() => {
+    return generateProductId(products, category || DEFAULT_CATEGORY);
+  }, [products, category]);
+
+  const handleSelectProduct = (product: Product) => {
+    setEditingId(product.id);
+    setName(product.name);
+    setStock(String(product.stock ?? 0));
+    setCategory(product.category || activeTab);
   };
 
-  const updateDraft = (id: string, field: 'name' | 'category' | 'stock', value: string) => {
-    setDrafts(prev => ({
-      ...prev,
-      [id]: { ...prev[id], [field]: value },
-    }));
+  const resetForm = () => {
+    setEditingId(null);
+    setName('');
+    setStock('');
+    setCategory(activeTab);
   };
 
-  const saveDraft = (id: string) => {
-    const draft = drafts[id];
-    const current = products.find(p => p.id === id);
-    if (!draft || !current) return;
-    const name = draft.name.trim();
-    if (!name) return;
-    const category = draft.category || DEFAULT_CATEGORY;
-    const stock = parseInt(draft.stock.replace(/,/g, ''), 10);
-    const normalizedStock = Number.isNaN(stock) ? 0 : stock;
-    if (
-      current.name === name &&
-      current.category === category &&
-      current.stock === normalizedStock
-    ) {
-      return;
-    }
-    const updated: Product = {
-      ...current,
-      name,
-      category,
-      stock: normalizedStock,
-    };
-    setProducts(prev => prev.map(p => (p.id === id ? updated : p)));
-  };
-
-  const canSaveNew = newDraft.name.trim() !== '';
-
-  const saveNewDraft = () => {
-    if (!canSaveNew) return;
-    const category = newDraft.category || DEFAULT_CATEGORY;
-    const stock = parseInt(newDraft.stock.replace(/,/g, ''), 10);
-    const normalizedStock = Number.isNaN(stock) ? 0 : stock;
+  const handleSave = () => {
+    if (!name.trim()) return;
+    const stockNum = parseInt(String(stock).replace(/,/g, ''), 10);
+    const normalizedStock = Number.isNaN(stockNum) ? 0 : stockNum;
+    const targetId = editingId || generateProductId(products, category);
     const newProduct: Product = {
-      id: generateProductId(products, category),
-      name: newDraft.name.trim(),
-      category,
+      id: targetId,
+      name: name.trim(),
+      category: category,
       stock: normalizedStock,
     };
-    setProducts(prev => [newProduct, ...prev]);
-    setIsAdding(false);
-    setNewDraft({ name: '', category: DEFAULT_CATEGORY, stock: '' });
+
+    if (editingId) {
+      setProducts(prev => prev.map(p => (p.id === editingId ? newProduct : p)));
+    } else {
+      setProducts(prev => [newProduct, ...prev]);
+    }
+    resetForm();
   };
 
-  const groupedProducts = CATEGORIES.map(cat => ({
-    category: cat,
-    items: filteredProducts.filter(p => p.category === cat),
-  })).filter(group => group.items.length > 0);
+  const handleDelete = (e: React.MouseEvent, product: Product) => {
+    e.stopPropagation();
+    const ok = window.confirm(`「${product.name}」を削除してもよろしいですか？`);
+    if (!ok) return;
+    setProducts(prev => prev.filter(p => p.id !== product.id));
+    if (editingId === product.id) resetForm();
+  };
 
-  const uncategorized = filteredProducts.filter(
-    p => !p.category || !CATEGORIES.includes(p.category)
-  );
-  if (uncategorized.length > 0) {
-    groupedProducts.push({ category: 'その他・未定', items: uncategorized });
-  }
-  if (isAdding && !groupedProducts.find(g => g.category === newDraft.category)) {
-    groupedProducts.unshift({ category: newDraft.category, items: [] });
-  }
+  const isSubmitDisabled = !name.trim();
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-col sm:flex-row gap-4 justify-between items-center bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
-        <div className="text-sm font-bold text-slate-500">商品一覧（直接編集）</div>
-        <button
-          onClick={() => {
-            setIsAdding(true);
-            setNewDraft({ name: '', category: DEFAULT_CATEGORY, stock: '' });
-          }}
-          className="w-full sm:w-auto flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2.5 rounded-xl transition-all text-sm font-bold shadow-lg shadow-indigo-100 active:scale-95"
-        >
-          <PackagePlus className="w-4 h-4" />
-          新規商品登録
-        </button>
-      </div>
+    <div className="flex flex-col h-[calc(100vh-8rem)] animate-in fade-in duration-300">
+      <div className="flex-shrink-0">
+        <div className={`bg-white rounded-2xl p-4 shadow-sm border transition-all duration-300 ${editingId ? 'border-amber-200 ring-2 ring-amber-50' : 'border-slate-100'}`}>
+          <div className="flex justify-between items-center mb-3">
+            <div className="flex items-center gap-2">
+              <div className={`w-2 h-2 rounded-full ${editingId ? 'bg-amber-500 animate-pulse' : 'bg-green-500'}`} />
+              <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                {editingId ? `編集: ${editingId}` : `新規: ${nextAvailableId}`}
+              </span>
+            </div>
+            {editingId ? (
+              <button onClick={resetForm} className="text-[10px] font-bold text-amber-600 bg-amber-50 px-2 py-1 rounded-md">
+                キャンセル
+              </button>
+            ) : (
+              <button
+                onClick={() => {
+                  resetForm();
+                  setCategory(activeTab);
+                }}
+                className="text-[10px] font-bold text-green-600 bg-green-50 px-2 py-1 rounded-md"
+              >
+                新規入力
+              </button>
+            )}
+          </div>
 
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-        <div className="overflow-x-auto custom-scrollbar">
-          <table className="w-full text-sm text-left border-collapse">
-            <thead>
-              <tr className="bg-slate-50/80 text-slate-500 font-bold uppercase text-[10px] tracking-widest border-b border-slate-100">
-                <th className="px-3 sm:px-6 py-4">商品名称</th>
-                <th className="px-1 py-4 w-[85px] text-right leading-tight whitespace-nowrap">
-                  注文総数<br/><span className="text-[8px] opacity-70">(未出荷)</span>
-                </th>
-                <th className="px-3 sm:px-6 py-4 w-[85px] text-right">在庫数</th>
-                <th className="px-3 sm:px-4 py-4 w-[70px] text-right">操作</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-50">
-              {filteredProducts.length === 0 ? (
-                <tr>
-                  <td colSpan={4} className="px-6 py-12 text-center text-slate-400 font-medium">登録されている商品はありません</td>
-                </tr>
-              ) : (
-                groupedProducts.map(({ category, items }) => (
-                  <React.Fragment key={category}>
-                    <tr className="bg-indigo-50/60">
-                      <td colSpan={4} className="px-3 sm:px-6 py-2 text-xs font-black text-indigo-500 tracking-widest">
-                        {category}
-                      </td>
-                    </tr>
-                    {isAdding && category === newDraft.category && (
-                      <tr className="bg-indigo-50/30">
-                        <td className="px-3 sm:px-6 py-4">
-                          <input
-                            value={newDraft.name}
-                            onChange={(e) => setNewDraft(prev => ({ ...prev, name: e.target.value }))}
-                            onKeyDown={(e) => handleEnterBlur(e, saveNewDraft)}
-                            placeholder="商品名を入力"
-                            className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm font-bold focus:ring-2 focus:ring-indigo-500 outline-none"
-                          />
-                          <select
-                            value={newDraft.category}
-                            onChange={(e) => setNewDraft(prev => ({ ...prev, category: e.target.value }))}
-                            onKeyDown={handleEnterBlur}
-                            className="mt-2 w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-xs font-bold focus:ring-2 focus:ring-indigo-500 outline-none"
-                          >
-                            {CATEGORIES.map(cat => (
-                              <option key={cat} value={cat}>{cat}</option>
-                            ))}
-                            <option value="その他・未定">その他・未定</option>
-                          </select>
-                        </td>
-                        <td className="px-1 py-4 text-right">
-                          <span className="text-slate-300 text-xs">—</span>
-                        </td>
-                        <td className="px-3 sm:px-6 py-4 text-right">
-                          <input
-                            value={newDraft.stock}
-                            onChange={(e) => setNewDraft(prev => ({ ...prev, stock: e.target.value.replace(/,/g, '') }))}
-                            onKeyDown={(e) => handleEnterBlur(e, saveNewDraft)}
-                            inputMode="numeric"
-                            enterKeyHint="done"
-                            placeholder="0"
-                            className="w-full text-right px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm font-bold focus:ring-2 focus:ring-indigo-500 outline-none"
-                          />
-                        </td>
-                        <td className="px-3 sm:px-4 py-4 text-right">
-                          <div className="flex flex-col gap-2 items-end">
-                            <button
-                              type="button"
-                              onClick={saveNewDraft}
-                              disabled={!canSaveNew}
-                              className={`text-xs font-bold px-3 py-2 rounded-lg ${canSaveNew ? 'bg-indigo-600 text-white hover:bg-indigo-700' : 'bg-slate-200 text-slate-400 cursor-not-allowed'}`}
-                            >
-                              保存
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => { setIsAdding(false); setNewDraft({ name: '', category: DEFAULT_CATEGORY, stock: '' }); }}
-                              className="text-[10px] font-bold text-slate-400 hover:text-slate-600"
-                            >
-                              取消
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    )}
-                    {items.map(product => {
-                      const pendingCount = pendingCounts[product.id] || 0;
-                      const draft = drafts[product.id] || { name: product.name, category: product.category || DEFAULT_CATEGORY, stock: String(product.stock ?? 0) };
-                      return (
-                        <tr 
-                          key={product.id} 
-                          className="hover:bg-indigo-50/50 transition-colors group"
-                        >
-                          <td className="px-3 sm:px-6 py-4">
-                            <input
-                              value={draft.name}
-                              onChange={(e) => updateDraft(product.id, 'name', e.target.value)}
-                              onBlur={() => saveDraft(product.id)}
-                              onKeyDown={(e) => handleEnterBlur(e, () => saveDraft(product.id))}
-                              className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm font-bold focus:ring-2 focus:ring-indigo-500 outline-none"
-                            />
-                            <select
-                              value={draft.category}
-                              onChange={(e) => updateDraft(product.id, 'category', e.target.value)}
-                              onBlur={() => saveDraft(product.id)}
-                              onKeyDown={(e) => handleEnterBlur(e, () => saveDraft(product.id))}
-                              className="mt-2 w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-xs font-bold focus:ring-2 focus:ring-indigo-500 outline-none"
-                            >
-                              {CATEGORIES.map(cat => (
-                                <option key={cat} value={cat}>{cat}</option>
-                              ))}
-                              <option value="その他・未定">その他・未定</option>
-                            </select>
-                          </td>
-                          <td className="px-1 py-4 text-right">
-                            <div className="flex items-center justify-end">
-                              <span className={`inline-block px-2.5 py-1.5 rounded-lg font-black text-xs sm:text-sm min-w-[45px] text-center ${
-                                pendingCount > 0 ? 'bg-indigo-50 text-indigo-600 ring-1 ring-indigo-100' : 'text-slate-300'
-                              }`}>
-                                {pendingCount.toLocaleString()}
-                              </span>
-                            </div>
-                          </td>
-                          <td className="px-3 sm:px-6 py-4 text-right">
-                            <input
-                              value={draft.stock}
-                              onChange={(e) => updateDraft(product.id, 'stock', e.target.value.replace(/,/g, ''))}
-                              onBlur={() => saveDraft(product.id)}
-                              onKeyDown={(e) => handleEnterBlur(e, () => saveDraft(product.id))}
-                              inputMode="numeric"
-                              enterKeyHint="done"
-                              className="w-full text-right px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm font-bold focus:ring-2 focus:ring-indigo-500 outline-none"
-                            />
-                          </td>
-                          <td className="px-3 sm:px-4 py-4 text-right">
-                            <button
-                              type="button"
-                              onClick={() => { setDeletingProduct(product); setIsDeleteConfirmOpen(true); }}
-                              className="text-red-500 hover:text-red-600 text-xs font-bold"
-                            >
-                              削除
-                            </button>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </React.Fragment>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      {isDeleteConfirmOpen && (
-        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-md flex items-center justify-center z-[60] p-4">
-          <div className="bg-white rounded-3xl w-full max-sm shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
-            <div className="p-8 text-center">
-              <div className="w-20 h-20 bg-red-50 rounded-full flex items-center justify-center mx-auto mb-6">
-                <AlertTriangle className="w-10 h-10 text-red-500" />
+          <div className="space-y-3">
+            <div>
+              <label className="text-[10px] font-bold text-slate-400 ml-1">商品名</label>
+              <input
+                type="text"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="例: ゆずり葉 (大)"
+                className="w-full bg-slate-50 border-none rounded-xl px-4 py-2.5 font-bold text-slate-800 outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-[10px] font-bold text-slate-400 ml-1">在庫数</label>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  enterKeyHint="done"
+                  value={stock}
+                  onChange={(e) => setStock(e.target.value.replace(/,/g, ''))}
+                  placeholder="0"
+                  className="w-full bg-slate-50 border-none rounded-xl px-4 py-2.5 font-bold text-slate-800 outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
+                />
               </div>
-              <h4 className="text-xl font-black text-slate-900 mb-2">商品を削除しますか？</h4>
-              <p className="text-sm text-slate-500 leading-relaxed mb-8 px-4">
-                「{deletingProduct?.name}」を削除すると、この商品のデータは元に戻せません。本当によろしいですか？
-              </p>
-              <div className="flex flex-col gap-3">
-                <button 
-                  onClick={confirmDelete}
-                  className="w-full py-4 bg-red-600 text-white rounded-2xl font-black text-sm hover:bg-red-700 transition-all shadow-xl shadow-red-100 active:scale-95"
-                >
-                  削除を実行する
-                </button>
-                <button 
-                  onClick={() => setIsDeleteConfirmOpen(false)}
-                  className="w-full py-4 bg-slate-100 text-slate-600 rounded-2xl font-bold text-sm hover:bg-slate-200 transition-all"
-                >
-                  キャンセル
-                </button>
+              <div>
+                <label className="text-[10px] font-bold text-slate-400 ml-1">大分類</label>
+                <div className="w-full bg-slate-50 border-none rounded-xl px-4 py-2.5 font-bold text-slate-800">
+                  {category}
+                </div>
               </div>
             </div>
           </div>
+
+          <button
+            onClick={handleSave}
+            disabled={isSubmitDisabled}
+            className={`w-full mt-4 py-3 rounded-xl font-black shadow-lg flex items-center justify-center gap-2 transition-all active:scale-95 text-sm ${isSubmitDisabled ? 'bg-slate-100 text-slate-300 cursor-not-allowed' : (editingId ? 'bg-amber-500 text-white shadow-amber-100' : 'bg-indigo-600 text-white shadow-indigo-100')}`}>
+            {editingId ? <Edit3 className="w-4 h-4" /> : <PackagePlus className="w-4 h-4" />}
+            {editingId ? '変更を保存' : '商品を登録'}
+          </button>
         </div>
-      )}
+      </div>
+
+      <div className="mt-4 flex-shrink-0">
+        <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide px-1">
+          {CATEGORIES.map((cat) => (
+            <button
+              key={cat}
+              onClick={() => setActiveTab(cat)}
+              className={`px-4 py-2 rounded-full text-[11px] font-black whitespace-nowrap transition-all duration-300 border-2 ${
+                activeTab === cat
+                ? 'bg-indigo-600 border-indigo-600 text-white shadow-md'
+                : 'bg-white border-slate-100 text-slate-400 hover:border-indigo-200'
+              }`}
+            >
+              {cat}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="flex-1 overflow-y-auto pt-1 space-y-2 pb-4">
+        {filteredProducts.length > 0 ? (
+          filteredProducts.map((product) => {
+            const pendingCount = pendingCounts[product.id] || 0;
+            return (
+              <div
+                key={product.id}
+                onClick={() => handleSelectProduct(product)}
+                className={`bg-white rounded-2xl p-4 shadow-sm border flex items-center justify-between transition-all active:scale-[0.98] cursor-pointer ${editingId === product.id ? 'border-amber-300 bg-amber-50/30' : 'border-slate-100 hover:border-indigo-100'}`}
+              >
+                <div>
+                  <div className="font-black text-slate-700 flex items-center gap-2 text-sm">
+                    {product.name}
+                    {editingId === product.id && <span className="text-[8px] bg-amber-500 text-white px-1.5 py-0.5 rounded-full animate-bounce">編集中</span>}
+                  </div>
+                  <div className="text-[10px] text-slate-400 font-bold mt-0.5">
+                    <span className="bg-slate-50 px-1.5 py-0.5 rounded text-[8px] border border-slate-100">{product.id}</span>
+                  </div>
+                </div>
+                <div className="flex items-center gap-4">
+                  <div className="text-right">
+                    <div className="text-base font-black text-indigo-600">{(product.stock || 0).toLocaleString()}</div>
+                    <div className="text-[10px] font-bold text-slate-400">在庫</div>
+                    <div className="text-[10px] font-bold text-slate-400">未出荷 {pendingCount.toLocaleString()}</div>
+                  </div>
+                  <button
+                    onClick={(e) => handleDelete(e, product)}
+                    className="p-2 text-slate-200 hover:text-red-500 hover:bg-red-50 rounded-full transition-all"
+                  >
+                    <Trash2 className="w-5 h-5" />
+                  </button>
+                </div>
+              </div>
+            );
+          })
+        ) : (
+          <div className="text-center py-10 text-slate-300 font-bold bg-white/50 rounded-3xl border-2 border-dashed border-slate-100 text-sm">
+            このカテゴリは空です
+          </div>
+        )}
+      </div>
     </div>
   );
 };
