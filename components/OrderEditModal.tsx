@@ -322,13 +322,6 @@ const OrderEditModal: React.FC<Props> = ({ isOpen, onClose, editingOrder, custom
                   >
                     {shippingDateVal === '' ? '出荷日未定' : shippingDateVal}
                   </button>
-                  <button
-                    type="button"
-                    onClick={() => setShippingDateVal('')}
-                    className="shrink-0 px-3 sm:px-4 py-2.5 sm:py-4 bg-white border border-slate-200 rounded-2xl text-slate-400 hover:text-slate-600 transition-all text-xs sm:text-sm font-bold"
-                  >
-                    削除
-                  </button>
                   <input
                     ref={shippingDateInputRef}
                     name="shippingDate"
@@ -350,13 +343,6 @@ const OrderEditModal: React.FC<Props> = ({ isOpen, onClose, editingOrder, custom
                     className="flex-1 min-w-0 px-4 sm:px-5 py-3 sm:py-4 bg-slate-50 border border-slate-100 rounded-2xl text-xs sm:text-base font-bold focus:ring-4 focus:ring-indigo-500/10 outline-none transition-all hover:bg-slate-100 text-slate-900 text-left"
                   >
                     {deliveryDateVal === '' ? '納品日未定' : deliveryDateVal}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setDeliveryDateVal('')}
-                    className="shrink-0 px-3 sm:px-4 py-2.5 sm:py-4 bg-white border border-slate-200 rounded-2xl text-slate-400 hover:text-slate-600 transition-all text-xs sm:text-sm font-bold"
-                  >
-                    削除
                   </button>
                   <input
                     ref={deliveryDateInputRef}

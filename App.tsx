@@ -33,7 +33,7 @@ import toast, { Toaster } from 'react-hot-toast';
 import { getAuth, GoogleAuthProvider, signInWithEmailAndPassword, onAuthStateChanged, signOut, getRedirectResult, reauthenticateWithPopup, reauthenticateWithRedirect } from 'firebase/auth';
 import { syncShippingOrdersToGoogleCalendar, ensureCalendarId } from './googleCalendar';
 
-const APP_VERSION = "Ver.2.20";
+const APP_VERSION = "Ver.2.21";
 const COMPANY_NAME = "注文管理システム";
 const ADMIN_EMAIL = "admin@chumon-kanri.com";
 
@@ -1202,7 +1202,7 @@ const App: React.FC = () => {
           )}
         </header>
 
-        <main className="flex-1 overflow-y-auto p-3">
+        <main className="flex-1 overflow-y-auto overflow-x-hidden p-3">
             <div className="w-full h-full">
                 {activeTab === 'stats' && <Dashboard orders={orders} products={products} customers={customers} onNavigate={(tab) => setActiveTab(tab as TabId)} />}
                 {activeTab === 'orders' && <OrderManager orders={orders} setOrders={setOrdersFS} customers={customers} products={products} showShipped={showShipped} viewType={'pre'} setViewType={() => {}} onEditOrder={openOrderModal} onShipOrder={handleShipOrder} />}
