@@ -117,7 +117,7 @@ const ProductManager: React.FC<Props> = ({ products, setProducts, orders }) => {
   const isSubmitDisabled = !name.trim();
 
   return (
-    <div className="flex flex-col h-[calc(100vh-8rem)] animate-in fade-in duration-300 overflow-x-hidden">
+    <div className="flex flex-col h-[calc(100vh-8rem)] animate-in fade-in duration-300 overflow-x-hidden max-w-full">
       <div className="flex-shrink-0">
         <div className={`bg-white rounded-2xl p-4 shadow-sm border transition-all duration-300 ${editingId ? 'border-amber-200 ring-2 ring-amber-50' : 'border-slate-100'}`}>
           <div className="flex justify-between items-center mb-3">
@@ -205,7 +205,7 @@ const ProductManager: React.FC<Props> = ({ products, setProducts, orders }) => {
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto pt-1 space-y-2 pb-4">
+      <div className="flex-1 overflow-y-auto pt-1 space-y-2 pb-4 overflow-x-hidden">
         {filteredProducts.length > 0 ? (
           filteredProducts.map((product) => {
             const pendingCount = pendingCounts[product.id] || 0;
@@ -213,11 +213,11 @@ const ProductManager: React.FC<Props> = ({ products, setProducts, orders }) => {
               <div
                 key={product.id}
                 onClick={() => handleSelectProduct(product)}
-                className={`bg-white rounded-2xl p-4 shadow-sm border flex items-center justify-between transition-all active:scale-[0.98] cursor-pointer ${editingId === product.id ? 'border-amber-300 bg-amber-50/30' : 'border-slate-100 hover:border-indigo-100'}`}
+                className={`bg-white rounded-2xl p-4 shadow-sm border flex items-center justify-between transition-all active:scale-[0.98] cursor-pointer min-w-0 ${editingId === product.id ? 'border-amber-300 bg-amber-50/30' : 'border-slate-100 hover:border-indigo-100'}`}
               >
-                <div>
+                <div className="min-w-0">
                   <div className="font-black text-slate-700 flex items-center gap-2 text-sm">
-                    {product.name}
+                    <span className="truncate">{product.name}</span>
                     {editingId === product.id && <span className="text-[8px] bg-amber-500 text-white px-1.5 py-0.5 rounded-full animate-bounce">編集中</span>}
                   </div>
                   <div className="text-[10px] text-slate-400 font-bold mt-0.5">

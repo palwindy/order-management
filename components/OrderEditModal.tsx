@@ -314,31 +314,20 @@ const OrderEditModal: React.FC<Props> = ({ isOpen, onClose, editingOrder, custom
               <div>
                 <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-3">出荷日</label>
                 <div className="flex gap-2 items-center">
-                  <select
-                    value={shippingDateVal === '' ? '__undecided' : shippingDateVal}
-                    onChange={(e) => {
-                      const next = e.target.value;
-                      if (next === '__undecided') {
-                        setShippingDateVal('');
-                      } else {
-                        setShippingDateVal(next);
-                      }
-                    }}
-                    onKeyDown={handleKeyDown}
-                    className="flex-1 min-w-0 px-3 sm:px-5 py-2.5 sm:py-4 bg-slate-50 border border-slate-100 rounded-2xl text-xs sm:text-base font-bold focus:ring-4 focus:ring-indigo-500/10 outline-none transition-all hover:bg-slate-100 text-slate-900"
-                  >
-                    <option value="__undecided">出荷日未定</option>
-                    {shippingDateVal !== '' && (
-                      <option value={shippingDateVal}>{shippingDateVal}</option>
-                    )}
-                  </select>
                   <button
                     type="button"
                     onClick={() => openDatePicker(shippingDateInputRef)}
                     aria-label="出荷日のカレンダーを開く"
-                    className="shrink-0 px-2.5 sm:px-4 py-2.5 sm:py-4 bg-white border border-slate-200 rounded-2xl text-slate-600 hover:bg-slate-50 transition-all flex items-center"
+                    className="flex-1 min-w-0 px-4 sm:px-5 py-3 sm:py-4 bg-slate-50 border border-slate-100 rounded-2xl text-xs sm:text-base font-bold focus:ring-4 focus:ring-indigo-500/10 outline-none transition-all hover:bg-slate-100 text-slate-900 text-left"
                   >
-                    <Calendar className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                    {shippingDateVal === '' ? '出荷日未定' : shippingDateVal}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShippingDateVal('')}
+                    className="shrink-0 px-3 sm:px-4 py-2.5 sm:py-4 bg-white border border-slate-200 rounded-2xl text-slate-400 hover:text-slate-600 transition-all text-xs sm:text-sm font-bold"
+                  >
+                    削除
                   </button>
                   <input
                     ref={shippingDateInputRef}
@@ -354,31 +343,20 @@ const OrderEditModal: React.FC<Props> = ({ isOpen, onClose, editingOrder, custom
               <div>
                 <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-3">納品日</label>
                 <div className="flex gap-2 items-center">
-                  <select
-                    value={deliveryDateVal === '' ? '__undecided' : deliveryDateVal}
-                    onChange={(e) => {
-                      const next = e.target.value;
-                      if (next === '__undecided') {
-                        setDeliveryDateVal('');
-                      } else {
-                        setDeliveryDateVal(next);
-                      }
-                    }}
-                    onKeyDown={handleKeyDown}
-                    className="flex-1 min-w-0 px-3 sm:px-5 py-2.5 sm:py-4 bg-slate-50 border border-slate-100 rounded-2xl text-xs sm:text-base font-bold focus:ring-4 focus:ring-indigo-500/10 outline-none transition-all hover:bg-slate-100 text-slate-900"
-                  >
-                    <option value="__undecided">納品日未定</option>
-                    {deliveryDateVal !== '' && (
-                      <option value={deliveryDateVal}>{deliveryDateVal}</option>
-                    )}
-                  </select>
                   <button
                     type="button"
                     onClick={() => openDatePicker(deliveryDateInputRef)}
                     aria-label="納品日のカレンダーを開く"
-                    className="shrink-0 px-2.5 sm:px-4 py-2.5 sm:py-4 bg-white border border-slate-200 rounded-2xl text-slate-600 hover:bg-slate-50 transition-all flex items-center"
+                    className="flex-1 min-w-0 px-4 sm:px-5 py-3 sm:py-4 bg-slate-50 border border-slate-100 rounded-2xl text-xs sm:text-base font-bold focus:ring-4 focus:ring-indigo-500/10 outline-none transition-all hover:bg-slate-100 text-slate-900 text-left"
                   >
-                    <Calendar className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                    {deliveryDateVal === '' ? '納品日未定' : deliveryDateVal}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setDeliveryDateVal('')}
+                    className="shrink-0 px-3 sm:px-4 py-2.5 sm:py-4 bg-white border border-slate-200 rounded-2xl text-slate-400 hover:text-slate-600 transition-all text-xs sm:text-sm font-bold"
+                  >
+                    削除
                   </button>
                   <input
                     ref={deliveryDateInputRef}
