@@ -214,7 +214,7 @@ const CalendarSettings: React.FC<Props> = ({ isOpen, onClose, orders, customers,
   };
 
   const ensureAccessToken = async (forceReauth: boolean = false): Promise<string | null> => {
-    const cached = pendingToken || localStorage.getItem('googleAccessToken') || '';
+    const cached = pendingToken || sessionStorage.getItem('googleAccessToken') || '';
     if (cached && !forceReauth) return cached;
 
     const auth = getAuth();
@@ -230,7 +230,7 @@ const CalendarSettings: React.FC<Props> = ({ isOpen, onClose, orders, customers,
       const token = credential?.accessToken || '';
       if (token) {
         setPendingToken(token);
-        localStorage.setItem('googleAccessToken', token);
+        sessionStorage.setItem('googleAccessToken', token);
         return token;
       }
     } catch (err) {
@@ -258,7 +258,7 @@ const CalendarSettings: React.FC<Props> = ({ isOpen, onClose, orders, customers,
       if (!accessToken) return;
 
       // Save first so other parts can read it immediately.
-      localStorage.setItem('googleAccessToken', accessToken);
+      sessionStorage.setItem('googleAccessToken', accessToken);
       localStorage.setItem('googleCalendarEmail', pendingEmail);
       localStorage.setItem('googleCalendarName', calendarName);
 
@@ -366,11 +366,11 @@ const CalendarSettings: React.FC<Props> = ({ isOpen, onClose, orders, customers,
       console.error(err);
       const msg = String(err?.message || '');
       if (msg.includes('403') || msg.includes('insufficient') || msg.includes('PERMISSION_DENIED')) {
-        localStorage.removeItem('googleAccessToken');
+        sessionStorage.removeItem('googleAccessToken');
         setPendingToken('');
       }
       if (msg.includes('401') || msg.includes('UNAUTHENTICATED')) {
-        localStorage.removeItem('googleAccessToken');
+        sessionStorage.removeItem('googleAccessToken');
         setPendingToken('');
       }
       if (msg.includes('404') || msg.includes('Not Found')) {

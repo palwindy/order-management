@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Users,
   Package,
@@ -33,7 +33,7 @@ import toast, { Toaster } from 'react-hot-toast';
 import { getAuth, GoogleAuthProvider, signInWithEmailAndPassword, onAuthStateChanged, signOut, getRedirectResult, reauthenticateWithPopup, reauthenticateWithRedirect } from 'firebase/auth';
 import { syncShippingOrdersToGoogleCalendar, ensureCalendarId } from './googleCalendar';
 
-const APP_VERSION = "Ver.2.22";
+const APP_VERSION = "Ver.2.23";
 const COMPANY_NAME = "注文管理システム";
 const ADMIN_EMAIL = "admin@chumon-kanri.com";
 
@@ -89,7 +89,7 @@ const App: React.FC = () => {
   const [accessLogs, setAccessLogs] = useState<any[]>([]);
 
   const isCalendarLinked =
-    !!localStorage.getItem('googleAccessToken') &&
+    !!sessionStorage.getItem('googleAccessToken') &&
     localStorage.getItem('calendarNeedsReauth') !== '1';
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -192,7 +192,7 @@ const App: React.FC = () => {
           result.user.providerData.find(p => p.providerId === 'google.com')?.email || '';
         if (googleEmail) localStorage.setItem('googleCalendarEmail', googleEmail);
         if (credential?.accessToken) {
-          localStorage.setItem('googleAccessToken', credential.accessToken);
+          sessionStorage.setItem('googleAccessToken', credential.accessToken);
           sessionStorage.removeItem('calendar_oauth_no_token');
         } else if (redirectFlag) {
           sessionStorage.setItem('calendar_oauth_no_token', '1');
@@ -375,7 +375,7 @@ const App: React.FC = () => {
     intent: 'settings' | 'sync' = 'sync',
     allowInteractive: boolean = true
   ): Promise<string | null> => {
-    const cached = localStorage.getItem('googleAccessToken') || '';
+    const cached = sessionStorage.getItem('googleAccessToken') || '';
     if (cached && !forceReauth) return cached;
 
     const auth = getAuth();
@@ -411,7 +411,7 @@ const App: React.FC = () => {
       const result = await reauthenticateWithPopup(user, provider);
       const credential = GoogleAuthProvider.credentialFromResult(result);
       const token = credential?.accessToken || '';
-      if (token) localStorage.setItem('googleAccessToken', token);
+      if (token) sessionStorage.setItem('googleAccessToken', token);
       return token || null;
     } catch (err) {
       console.error(err);
@@ -465,10 +465,10 @@ const App: React.FC = () => {
       const msg = String(err?.message || '');
       const isAuthError = msg.includes('403') || msg.includes('insufficient') || msg.includes('PERMISSION_DENIED') || msg.includes('401') || msg.includes('UNAUTHENTICATED');
       if (isAuthError) {
-        localStorage.removeItem('googleAccessToken');
+        sessionStorage.removeItem('googleAccessToken');
         localStorage.setItem('calendarNeedsReauth', '1');
         if (isManual) {
-          const retryToken = await ensureCalendarAccessToken(true, 'sync', false);
+          const retryToken = await ensureCalendarAccessToken(true, 'sync', true);
           if (retryToken) {
             const calendarName = localStorage.getItem('googleCalendarName') || '注文管理アプリ';
             let calendarId = localStorage.getItem('googleCalendarId') || '';

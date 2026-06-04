@@ -126,6 +126,10 @@ const OrderEditModal: React.FC<Props> = ({ isOpen, onClose, editingOrder, custom
       if (item.quantity === '' || isNaN(q) || q <= 0) {
         currentErrors.push(`${idx + 1}行目の数量を正しく入力してください。`);
       }
+      const price = Number(item.unitPrice);
+      if (item.unitPrice === '' || isNaN(price) || price < 0) {
+        currentErrors.push(`${idx + 1}行目の単価を正しく入力してください。`);
+      }
     });
 
     if (currentErrors.length > 0) {

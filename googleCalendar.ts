@@ -82,22 +82,6 @@ async function calendarFetch(accessToken: string, input: string, init?: RequestI
   return null;
 }
 
-async function findExistingEventId(accessToken: string, order: Order, calendarId: string): Promise<string | null> {
-  const timeMin = `${order.shippingDate}T00:00:00+09:00`;
-  const timeMax = `${addDaysISO(order.shippingDate, 1)}T00:00:00+09:00`;
-
-  const url = new URL(`https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events`);
-  url.searchParams.set('singleEvents', 'true');
-  url.searchParams.set('maxResults', '1');
-  url.searchParams.set('orderBy', 'startTime');
-  url.searchParams.set('timeMin', timeMin);
-  url.searchParams.set('timeMax', timeMax);
-  url.searchParams.set('privateExtendedProperty', `orderId=${order.id}`);
-
-  const data = await calendarFetch(accessToken, url.toString(), { method: 'GET' });
-  const items = (data?.items || []) as Array<{ id?: string }>;
-  return items[0]?.id || null;
-}
 
 async function listManagedEvents(accessToken: string, calendarId: string): Promise<GoogleCalendarEvent[]> {
   const events: GoogleCalendarEvent[] = [];
@@ -195,7 +179,8 @@ export async function syncShippingOrdersToGoogleCalendar(args: SyncArgs) {
 
   for (const order of targets) {
     const event = buildOrderEvent(order, customers, products);
-    const existingId = await findExistingEventId(accessToken, order, targetCalendarId);
+    const existingEvent = existingEvents.find(e => e.extendedProperties?.private?.orderId === order.id);
+    const existingId = existingEvent?.id || null;
 
     if (existingId) {
       await calendarFetch(
